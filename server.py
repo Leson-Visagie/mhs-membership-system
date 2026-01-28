@@ -744,3 +744,7 @@ if __name__ == '__main__':
     # Production uses gunicorn, development uses Flask dev server
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=DEBUG, host='0.0.0.0', port=port)
+else:
+    # This runs when imported by gunicorn on Render
+    print("📦 Running in production mode - initializing database...")
+    init_db()
