@@ -90,6 +90,41 @@ def init_db():
         )
     ''')
     
+    # Create default admin account if no admins exist
+    cursor.execute('SELECT COUNT(*) FROM members WHERE is_admin = 1')
+    admin_count = cursor.fetchone()[0]
+    
+    if admin_count == 0:
+        print("\n⚠️  No admin accounts found. Creating default admin...")
+        default_admin_email = 'adminL'
+        default_admin_password = 'leson05jarred07'
+        password_hash = hash_password(default_admin_password)
+        
+        try:
+            cursor.execute('''
+                INSERT INTO members 
+                (member_number, first_name, surname, email, phone, password_hash, 
+                 membership_type, expiry_date, status, photo_url, is_admin)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ''', (
+                'M0000',
+                'Leson',
+                'Visagie',
+                default_admin_email,
+                '',
+                password_hash,
+                'Solo',
+                '2030-12-31',
+                'active',
+                'https://ui-avatars.com/api/?name=Leson+Visagie&background=059669&color=fff'
+            ))
+            print("✅ Default admin created!")
+            print(f"   Username: {default_admin_email}")
+            print(f"   Password: {default_admin_password}")
+            print("   Please login and add other admin accounts.")
+        except Exception as e:
+            print(f"⚠️  Could not create default admin: {e}")
+    
     conn.commit()
     conn.close()
 
@@ -549,6 +584,123 @@ def get_expiring_members():
     except Exception as e:
         conn.close()
         return jsonify({'error': 'Failed to fetch expiring members'}), 500
+
+@app.route('/api/admin/create-admin', methods=['POST'])
+def create_admin():
+    """Create new admin account (Admin only)"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    data = request.json
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '').strip()
+    first_name = data.get('first_name', '').strip()
+    surname = data.get('surname', '').strip()
+    member_number = data.get('member_number', '').strip()
+    
+    if not all([email, password, first_name, surname, member_number]):
+        return jsonify({'error': 'All fields required'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check if email already exists
+        cursor.execute('SELECT email FROM members WHERE email = ?', (email,))
+        if cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'Email already exists'}), 400
+        
+        # Check if member number already exists
+        cursor.execute('SELECT member_number FROM members WHERE member_number = ?', (member_number,))
+        if cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'Member number already exists'}), 400
+        
+        password_hash = hash_password(password)
+        
+        cursor.execute('''
+            INSERT INTO members 
+            (member_number, first_name, surname, email, phone, password_hash, 
+             membership_type, expiry_date, status, photo_url, is_admin)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ''', (
+            member_number,
+            first_name,
+            surname,
+            email,
+            '',
+            password_hash,
+            'Solo',
+            '2030-12-31',
+            'active',
+            f'https://ui-avatars.com/api/?name={first_name}+{surname}&background=059669&color=fff'
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Admin account created for {first_name} {surname}',
+            'email': email
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': f'Failed to create admin: {str(e)}'}), 500
+
+@app.route('/api/member/change-password', methods=['POST'])
+def change_password():
+    """Change member password"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.json
+    current_password = data.get('current_password', '').strip()
+    new_password = data.get('new_password', '').strip()
+    
+    if not current_password or not new_password:
+        return jsonify({'error': 'Both current and new password required'}), 400
+    
+    if len(new_password) < 6:
+        return jsonify({'error': 'New password must be at least 6 characters'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Verify current password
+        cursor.execute('SELECT password_hash FROM members WHERE email = ?', (user['email'],))
+        result = cursor.fetchone()
+        
+        if not result or result[0] != hash_password(current_password):
+            conn.close()
+            return jsonify({'error': 'Current password is incorrect'}), 401
+        
+        # Update password
+        new_password_hash = hash_password(new_password)
+        cursor.execute('''
+            UPDATE members 
+            SET password_hash = ? 
+            WHERE email = ?
+        ''', (new_password_hash, user['email']))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Password changed successfully'
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': 'Failed to change password'}), 500
 
 @app.errorhandler(404)
 def not_found(e):

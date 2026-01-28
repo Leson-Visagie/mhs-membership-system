@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>School Parent Membership System</title>
+    <title>Middies Klub Membership System</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:wght@600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -647,7 +647,7 @@
 <body>
     <!-- Navigation -->
     <nav class="nav" id="mainNav" style="display: none;">
-        <div class="nav-brand">🎓 Parent Club</div>
+        <div class="nav-brand">Middies Klub</div>
         <div class="nav-links">
             <span id="userGreeting" style="margin-right: 1rem; color: var(--text-secondary); font-weight: 500;"></span>
             <button class="nav-btn" id="navMyCard" onclick="showView('member')">My Card</button>
@@ -661,7 +661,7 @@
     <div id="loginView" class="view active">
         <div class="container">
             <div class="login-container">
-                <h2>🎓 Member Login</h2>
+                <h2>Middies Klub Member Login</h2>
                 <div id="loginError" class="alert error" style="display: none;"></div>
                 <form onsubmit="handleLogin(event)">
                     <div class="form-group">
@@ -675,7 +675,7 @@
                     <button type="submit" class="btn btn-primary">Login</button>
                 </form>
                 <p style="text-align: center; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
-                    First time? Your default password is your email address.
+                    Enter your username and password to access your membership.
                 </p>
             </div>
         </div>
@@ -688,13 +688,34 @@
             
             <div class="points-card">
                 <div class="points-value" id="memberPoints">0</div>
-                <div class="points-label">🌟 Loyalty Points</div>
+                <div class="points-label">Loyalty Points</div>
                 <p style="text-align: center; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
                     Earn 10 points per event attendance!
                 </p>
             </div>
 
             <div class="attendance-section">
+                <h3 style="margin-bottom: 1rem; color: var(--primary);">Change Password</h3>
+                <div id="passwordChangeError" class="alert error" style="display: none;"></div>
+                <div id="passwordChangeSuccess" class="alert success" style="display: none;"></div>
+                <form onsubmit="handleChangePassword(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="currentPassword">Current Password</label>
+                        <input type="password" id="currentPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">New Password (min 6 characters)</label>
+                        <input type="password" id="newPassword" minlength="6" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" minlength="6" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Change Password</button>
+                </form>
+            </div>
+
+            <div class="attendance-section" style="margin-top: 2rem;">
                 <h3 style="margin-bottom: 1rem; color: var(--primary);">My Attendance History</h3>
                 <div id="attendanceHistory"></div>
             </div>
@@ -750,6 +771,37 @@
                     <div class="stat-value" id="statTotalPoints">0</div>
                     <div class="stat-label">Total Points Awarded</div>
                 </div>
+            </div>
+
+            <div class="upload-section">
+                <h3 style="margin-bottom: 1rem;">Create New Admin Account</h3>
+                <div id="createAdminError" class="alert error" style="display: none;"></div>
+                <div id="createAdminSuccess" class="alert success" style="display: none;"></div>
+                <form onsubmit="handleCreateAdmin(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="adminMemberNumber">Member Number</label>
+                        <input type="text" id="adminMemberNumber" placeholder="M0001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminFirstName">First Name</label>
+                        <input type="text" id="adminFirstName" placeholder="John" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminSurname">Surname</label>
+                        <input type="text" id="adminSurname" placeholder="Doe" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminEmail">Email / Username</label>
+                        <input type="text" id="adminEmail" placeholder="admin@school.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminPassword">Password</label>
+                        <input type="password" id="adminPassword" placeholder="Min 6 characters" minlength="6" required>
+                    </div>
+                    <div style="display: flex; align-items: flex-end;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Create Admin</button>
+                    </div>
+                </form>
             </div>
 
             <div class="upload-section">
@@ -869,6 +921,113 @@
             }
         }
 
+        async function handleChangePassword(event) {
+            event.preventDefault();
+            
+            const currentPassword = document.getElementById('currentPassword').value.trim();
+            const newPassword = document.getElementById('newPassword').value.trim();
+            const confirmPassword = document.getElementById('confirmPassword').value.trim();
+            
+            const errorDiv = document.getElementById('passwordChangeError');
+            const successDiv = document.getElementById('passwordChangeSuccess');
+            
+            // Hide previous messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            // Validate passwords match
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = 'New passwords do not match';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/member/change-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authToken
+                    },
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    successDiv.textContent = 'Password changed successfully!';
+                    successDiv.style.display = 'block';
+                    // Clear form
+                    document.getElementById('currentPassword').value = '';
+                    document.getElementById('newPassword').value = '';
+                    document.getElementById('confirmPassword').value = '';
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to change password';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function handleCreateAdmin(event) {
+            event.preventDefault();
+            
+            const memberNumber = document.getElementById('adminMemberNumber').value.trim();
+            const firstName = document.getElementById('adminFirstName').value.trim();
+            const surname = document.getElementById('adminSurname').value.trim();
+            const email = document.getElementById('adminEmail').value.trim();
+            const password = document.getElementById('adminPassword').value.trim();
+            
+            const errorDiv = document.getElementById('createAdminError');
+            const successDiv = document.getElementById('createAdminSuccess');
+            
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/create-admin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authToken
+                    },
+                    body: JSON.stringify({
+                        member_number: memberNumber,
+                        first_name: firstName,
+                        surname: surname,
+                        email: email,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    successDiv.textContent = `Admin created successfully! Username: ${email}, Password: ${password}`;
+                    successDiv.style.display = 'block';
+                    // Clear form
+                    document.getElementById('adminMemberNumber').value = '';
+                    document.getElementById('adminFirstName').value = '';
+                    document.getElementById('adminSurname').value = '';
+                    document.getElementById('adminEmail').value = '';
+                    document.getElementById('adminPassword').value = '';
+                    // Refresh admin data
+                    loadAdminData();
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to create admin';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
         async function loadUserData() {
             try {
                 const response = await fetch(`${API_BASE}/member/profile`, {
@@ -945,7 +1104,7 @@
             let html = `
                 <div class="membership-card">
                     <div class="card-header">
-                        <div class="card-logo">🎓 Parent Club</div>
+                        <div class="card-logo">Middies Klub</div>
                         <div class="card-status ${statusClass}">${statusText}</div>
                     </div>
                     <div class="card-body">

@@ -79,7 +79,7 @@ Complete guide to deploy the School Membership System to production hosting.
    - Sign up (free)
    - Connect your GitHub account
 
-2. **Create New Web Service**:`
+2. **Create New Web Service**:
    - Click "New +" → "Web Service"
    - Select your GitHub repository
    - Configure:
