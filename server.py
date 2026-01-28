@@ -96,8 +96,8 @@ def init_db():
     
     if admin_count == 0:
         print("\n⚠️  No admin accounts found. Creating default admin...")
-        default_admin_email = 'adminL@123.com'
-        default_admin_password = 'leson05jarred07'
+        default_admin_email = 'admin@schoolsystem.com'
+        default_admin_password = 'Admin123!'
         password_hash = hash_password(default_admin_password)
         
         try:
@@ -259,24 +259,39 @@ def import_excel():
 def login():
     """Login endpoint - email-based authentication"""
     data = request.json
+    
+    # Debug logging
+    print(f"Login attempt with data: {data}")
+    
     email = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
     
     if not email or not password:
+        print("Missing email or password")
         return jsonify({'error': 'Email and password required'}), 400
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
+        print(f"Looking for user with email: {email}")
         cursor.execute('SELECT * FROM members WHERE email = ?', (email,))
         member = cursor.fetchone()
         
+        if member:
+            print(f"Found user: {member['email']}")
+            print(f"Stored hash: {member['password_hash']}")
+            print(f"Provided password hash: {hash_password(password)}")
+            
         if member and member['password_hash'] == hash_password(password):
             role = 'admin' if member['is_admin'] == 1 else 'member'
+            print(f"Password match! Role: {role}")
             
             token = generate_token()
             expires_at = (datetime.now() + timedelta(days=30)).isoformat()
+            
+            # Clean up old sessions for this user
+            cursor.execute('DELETE FROM sessions WHERE email = ?', (email,))
             
             cursor.execute('''
                 INSERT INTO sessions (email, token, role, expires_at)
@@ -301,14 +316,19 @@ def login():
                     'is_admin': member['is_admin']
                 }
             })
-        
-        conn.close()
-        return jsonify({'error': 'Invalid email or password'}), 401
+        else:
+            print("Invalid credentials")
+            conn.close()
+            return jsonify({'error': 'Invalid email or password'}), 401
         
     except Exception as e:
+        print(f"Login error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         conn.close()
-        return jsonify({'error': 'Login failed'}), 500
+        return jsonify({'error': f'Login failed: {str(e)}'}), 500
 
+        
 @app.route('/api/member/profile', methods=['GET'])
 def get_member_profile():
     """Get member profile and attendance"""
