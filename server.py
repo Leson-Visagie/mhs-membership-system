@@ -96,7 +96,7 @@ def init_db():
     
     if admin_count == 0:
         print("\n⚠️  No admin accounts found. Creating default admin...")
-        default_admin_email = 'adminL@'
+        default_admin_email = 'adminL@123.com'
         default_admin_password = 'leson05jarred07'
         password_hash = hash_password(default_admin_password)
         
