@@ -307,7 +307,16 @@
         }
 
         /* Points Display */
-        
+        .points-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px var(--shadow);
+            margin-top: 2rem;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
 
         .points-value {
             font-family: 'Fraunces', serif;
@@ -324,7 +333,16 @@
         }
 
         /* Attendance History */
-       
+        .attendance-section {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px var(--shadow);
+            margin-top: 2rem;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
 
         .attendance-item {
             padding: 1rem;
@@ -643,8 +661,6 @@
             }
         }
 
-
-
     /* ============================================
    MHS BRANDING UPDATE
    Add this to your existing CSS
@@ -689,7 +705,7 @@ body::after {
     padding: var(--spacing-xl);
     border-radius: var(--radius-2xl);
     text-align: center;
-    margin: var(--spacing-xl) auto;
+    /* margin: var(--spacing-xl) auto; */
     max-width: 400px;
     box-shadow: var(--shadow-xl), 0 10px 30px -5px rgba(255, 193, 7, 0.4);
     position: relative;
@@ -823,324 +839,7 @@ body::after {
         height: 90px;
         font-size: 2rem;
     }
-} 
-
-
-/* ============================================
-   ALIGNMENT & STYLING FIXES
-   Add this to your CSS or replace existing sections
-   ============================================ */
-
-/* Points Card - Better Alignment & Styling */
-.points-card {
-    background: linear-gradient(135deg, #FFC107 0%, #FFA000 100%);
-    color: #1a472a;
-    padding: var(--spacing-xl);
-    border-radius: var(--radius-2xl);
-    text-align: center;
-    margin: var(--spacing-xl) auto;
-    max-width: 400px;
-    box-shadow: var(--shadow-xl), 0 10px 30px -5px rgba(255, 193, 7, 0.4);
-    position: relative;
-    overflow: hidden;
-}
-
-.points-card::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 220px;
-    height: 220px;
-    background-image: url('/mhs-logo.png');
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    opacity: 0.12;
-    pointer-events: none;
-}
-
-.points-value {
-    font-family: 'Playfair Display', 'Fraunces', serif;
-    font-size: clamp(2.5rem, 8vw, 3.5rem);
-    font-weight: 900;
-    margin-bottom: var(--spacing-sm);
-    position: relative;
-    z-index: 1;
-    color: #1a472a;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    line-height: 1;
-}
-
-.points-label {
-    font-size: 1rem;
-    font-weight: 700;
-    opacity: 0.95;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    position: relative;
-    z-index: 1;
-    color: #1a472a;
-    margin-bottom: var(--spacing-sm);
-}
-
-.points-sublabel {
-    margin-top: var(--spacing-md);
-    font-size: 0.875rem;
-    opacity: 0.85;
-    position: relative;
-    z-index: 1;
-    color: #2d5f3e;
-    line-height: 1.4;
-}
-
-/* Section Cards - Better Spacing & Alignment */
-.section-card,
-.attendance-section {
-    background: var(--card-bg);
-    border-radius: var(--radius-xl);
-    padding: var(--spacing-xl);
-    margin-bottom: var(--spacing-xl);
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border-light);
-}
-
-.section-card h3,
-.attendance-section h3 {
-    margin-bottom: var(--spacing-lg);
-    color: var(--primary);
-    padding-bottom: var(--spacing-md);
-    border-bottom: 2px solid var(--border-light);
-}
-
-/* Change Password Section - Better Alignment */
-.password-change-section {
-    background: var(--card-bg);
-    border-radius: var(--radius-xl);
-    padding: var(--spacing-xl);
-    margin: var(--spacing-xl) auto;
-    max-width: 600px;
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border-light);
-}
-
-.password-change-section h3 {
-    margin-bottom: var(--spacing-lg);
-    color: var(--primary);
-    padding-bottom: var(--spacing-md);
-    border-bottom: 2px solid var(--border-light);
-}
-
-/* Form Groups - Consistent Spacing */
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-lg);
-}
-
-.form-group label {
-    font-weight: 600;
-    color: var(--text);
-    font-size: 0.875rem;
-    letter-spacing: 0.01em;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-    padding: 0.875rem var(--spacing-md);
-    border: 2px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 1rem;
-    font-family: inherit;
-    transition: all 0.2s ease;
-    background: var(--card-bg);
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(26, 71, 42, 0.1);
-}
-
-/* Buttons - Consistent Sizing */
-.btn {
-    padding: var(--spacing-md) var(--spacing-lg);
-    border: none;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-family: inherit;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    font-size: 1rem;
-    width: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
-    min-height: 48px;
-}
-
-/* Container Consistency */
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: var(--spacing-xl) var(--spacing-lg);
-    position: relative;
-    z-index: 1;
-}
-
-/* Membership Card Container - Center Alignment */
-.member-view-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-}
-
-/* Points Card Alignment Fix */
-.points-section {
-    width: 100%;
-    max-width: 400px;
-    margin: var(--spacing-xl) auto;
-}
-
-/* Attendance Section Alignment */
-.attendance-section {
-    width: 100%;
-    max-width: 800px;
-    margin: var(--spacing-xl) auto;
-}
-
-/* Mobile Adjustments */
-@media (max-width: 768px) {
-    .container {
-        padding: var(--spacing-lg) var(--spacing-md);
-    }
-
-    .section-card,
-    .attendance-section,
-    .password-change-section {
-        padding: var(--spacing-lg);
-        margin-bottom: var(--spacing-lg);
-    }
-
-    .points-card {
-        margin: var(--spacing-lg) auto;
-    }
-}
-
-@media (max-width: 480px) {
-    .container {
-        padding: var(--spacing-md);
-    }
-
-    .section-card,
-    .attendance-section,
-    .password-change-section {
-        padding: var(--spacing-md);
-        border-radius: var(--radius-lg);
-    }
-
-    .points-card {
-        padding: var(--spacing-lg);
-        margin: var(--spacing-md) auto;
-        border-radius: var(--radius-xl);
-    }
-
-    .points-value {
-        font-size: 2.5rem;
-    }
-
-    .points-card::before {
-        width: 150px;
-        height: 150px;
-        opacity: 0.1;
-    }
-}
-
-/* Alignment Utilities */
-.centered-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-}
-
-.full-width {
-    width: 100%;
-}
-
-.max-width-sm {
-    max-width: 400px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-.max-width-md {
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-.max-width-lg {
-    max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-/* Section Spacing */
-.section-spacing {
-    margin-top: var(--spacing-xl);
-    margin-bottom: var(--spacing-xl);
-}
-
-@media (max-width: 768px) {
-    .section-spacing {
-        margin-top: var(--spacing-lg);
-        margin-bottom: var(--spacing-lg);
-    }
-}
-
-@media (max-width: 480px) {
-    .section-spacing {
-        margin-top: var(--spacing-md);
-        margin-bottom: var(--spacing-md);
-    }
-}
-
-/* Fix for card edges being cut off */
-.membership-card,
-.points-card,
-.section-card,
-.attendance-section {
-    /* Prevent overflow */
-    box-sizing: border-box;
-    
-    /* Ensure proper rendering */
-    will-change: transform;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-}
-
-/* Smooth rounded corners on all cards */
-.membership-card,
-.points-card {
-    border-radius: var(--radius-2xl);
-    /* Ensure content doesn't overflow rounded corners */
-    isolation: isolate;
-}
-
-.section-card,
-.attendance-section,
-.password-change-section {
-    border-radius: var(--radius-xl);
-    isolation: isolate;
-}
+}    
     </style>
 
 
