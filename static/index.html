@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Middies Klub Membership System</title>
+    <link rel="icon" type="image/png" href="/mhs-logo.png">
+    <link rel="apple-touch-icon" href="/mhs-logo.png">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:wght@600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -658,7 +660,189 @@
                 padding: 0.75rem 0.5rem;
             }
         }
+
+    /* ============================================
+   MHS BRANDING UPDATE
+   Add this to your existing CSS
+   ============================================ */
+
+/* MHS Color Scheme */
+:root {
+    --mhs-green: #1a472a;
+    --mhs-green-light: #2d5f3e;
+    --mhs-gold: #FFC107;
+    --mhs-gold-dark: #FFA000;
+    
+    /* Update primary colors to MHS colors */
+    --primary: #1a472a;
+    --primary-dark: #0f3320;
+    --primary-light: #2d5f3e;
+    --accent: #FFC107;
+}
+
+/* MHS Logo as subtle background watermark */
+body::after {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    height: 500px;
+    background-image: url('/mhs-logo.png'); /* Upload logo as mhs-logo.png */
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Yellow Points Card with MHS Logo */
+.points-card {
+    background: linear-gradient(135deg, #FFC107 0%, #FFA000 100%);
+    color: #1a472a;
+    padding: var(--spacing-xl);
+    border-radius: var(--radius-2xl);
+    text-align: center;
+    margin: var(--spacing-xl) auto;
+    max-width: 400px;
+    box-shadow: var(--shadow-xl), 0 10px 30px -5px rgba(255, 193, 7, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.points-card::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 220px;
+    height: 220px;
+    background-image: url('/mhs-logo.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+.points-value {
+    font-family: 'Playfair Display', 'Fraunces', serif;
+    font-size: clamp(2.5rem, 8vw, 3.5rem);
+    font-weight: 900;
+    margin-bottom: var(--spacing-sm);
+    position: relative;
+    z-index: 1;
+    color: #1a472a;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.points-label {
+    font-size: 1rem;
+    font-weight: 700;
+    opacity: 0.95;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    position: relative;
+    z-index: 1;
+    color: #1a472a;
+}
+
+.points-sublabel {
+    margin-top: var(--spacing-md);
+    font-size: 0.875rem;
+    opacity: 0.85;
+    position: relative;
+    z-index: 1;
+    color: #2d5f3e;
+}
+
+/* Profile Photos on Cards - Larger & Better */
+.member-photo {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid rgba(255,255,255,0.4);
+    margin-bottom: var(--spacing-md);
+    box-shadow: var(--shadow-lg);
+    background: rgba(255,255,255,0.1);
+}
+
+.member-photo-placeholder {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #FFC107 0%, #FFA000 100%);
+    border: 4px solid rgba(255,255,255,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: #1a472a;
+    margin-bottom: var(--spacing-md);
+    box-shadow: var(--shadow-lg);
+    font-family: 'Playfair Display', serif;
+}
+
+/* Update membership card to MHS colors */
+.membership-card {
+    background: linear-gradient(135deg, #1a472a 0%, #0f3320 100%);
+}
+
+/* Navigation brand in gold */
+.nav-brand {
+    color: #FFC107;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Update primary button colors */
+.btn-primary {
+    background: #1a472a;
+    color: #FFC107;
+}
+
+.btn-primary:hover {
+    background: #0f3320;
+    box-shadow: 0 12px 35px -5px rgba(26, 71, 42, 0.35);
+}
+
+.nav-btn.active {
+    background: #1a472a;
+    color: #FFC107;
+}
+
+/* Admin stats cards with MHS colors */
+.stat-value {
+    color: #1a472a;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+    body::after {
+        width: 300px;
+        height: 300px;
+        opacity: 0.03;
+    }
+
+    .points-card::before {
+        width: 150px;
+        height: 150px;
+    }
+
+    .member-photo,
+    .member-photo-placeholder {
+        width: 90px;
+        height: 90px;
+        font-size: 2rem;
+    }
+}    
     </style>
+
+
 </head>
 <body>
     <!-- Navigation -->
@@ -1130,7 +1314,19 @@
                         <div class="card-status ${statusClass}">${statusText}</div>
                     </div>
                     <div class="card-body">
-                        <img src="${member.photo_url}" alt="${member.first_name} ${member.surname}" class="member-photo" onerror="this.src='https://ui-avatars.com/api/?name=${member.first_name}+${member.surname}&size=100&background=059669&color=fff'">
+                    <!-- Profile Photo with fallback -->
+                    ${member.photo_url 
+                        ? `<img src="${member.photo_url}" 
+                            alt="${member.first_name}" 
+                            class="member-photo" 
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="member-photo-placeholder" style="display:none;">
+                            ${member.first_name[0]}${member.surname[0]}
+                        </div>`
+                        : `<div class="member-photo-placeholder">
+                            ${member.first_name[0]}${member.surname[0]}
+                        </div>`
+                    }
                         <div class="member-name">${member.first_name} ${member.surname}</div>
                         <div class="member-info">
                             <div class="info-row">
@@ -1760,7 +1956,27 @@
                 const phone = row['Contact Number'] || '';
                 
                 // Get photo URL
-                const photoUrl = row['Upload profile picture'] || '';
+                // When processing each member row
+                let photoUrl = row['Upload profile picture'] || '';
+
+                // If it's a Google Drive link, convert it
+                if (photoUrl && photoUrl.includes('drive.google.com')) {
+                    const fileIdMatch = photoUrl.match(/[-\w]{25,}/);
+                    if (fileIdMatch) {
+                        photoUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[0]}`;
+                    }
+                }
+
+                // If no photo, use initials
+                if (!photoUrl) {
+                    const names = (row['Name & Surname'] || 'Member').split(' ');
+                    const firstName = names[0] || 'M';
+                    const lastName = names[1] || '';
+                    photoUrl = `https://ui-avatars.com/api/?name=${firstName}+${lastName}&background=1a472a&color=FFC107&size=200&bold=true`;
+                }
+
+                // Add to member object
+                member.photo_url = photoUrl;
                 
                 // Check if admin (you can manually mark some emails as admin)
                 // For now, we'll check if email contains 'admin' or matches specific emails
