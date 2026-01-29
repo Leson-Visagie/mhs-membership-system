@@ -995,6 +995,27 @@
             transform: scale(0.98);
         }
 
+        /* Admin Creation Form - Mobile Fix */
+        .admin-create-form {
+            display: grid;
+            grid-template-columns: 1fr;  /* Single column on mobile */
+            gap: var(--spacing-md);
+        }
+
+        @media (min-width: 640px) {
+            .admin-create-form {
+                grid-template-columns: 1fr 1fr;  /* Two columns on tablet+ */
+            }
+        }
+
+        .admin-create-form .form-group:last-child {
+            grid-column: 1 / -1;  /* Button spans full width */
+        }
+
+        .admin-create-form .btn {
+            width: 100%;
+        }
+
         @media (max-width: 640px) {
             .family-cards {
                 grid-template-columns: 1fr;
@@ -1190,7 +1211,7 @@
                 <h3 style="margin-bottom: 1rem;">Create New Admin Account</h3>
                 <div id="createAdminError" class="alert error" style="display: none;"></div>
                 <div id="createAdminSuccess" class="alert success" style="display: none;"></div>
-                <form onsubmit="handleCreateAdmin(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <form onsubmit="handleCreateAdmin(event)" class="admin-create-form">
                     <div class="form-group">
                         <label for="adminMemberNumber">Member Number</label>
                         <input type="text" id="adminMemberNumber" placeholder="M0001" required>
