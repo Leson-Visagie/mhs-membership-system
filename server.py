@@ -463,6 +463,62 @@ def scan_qr():
         conn.close()
         return jsonify({'error': 'Scan failed'}), 500
 
+@app.route('/api/member-info/<member_number>', methods=['GET'])
+def get_member_info(member_number):
+    """Get member info for confirmation display"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check regular members
+        cursor.execute('''
+            SELECT m.*, m.first_name || " " || m.surname as member_name
+            FROM members m
+            WHERE m.member_number = ?
+        ''', (member_number,))
+        
+        member = cursor.fetchone()
+        
+        if not member:
+            # Check family members
+            cursor.execute('''
+                SELECT m.*, fm.name as member_name, fm.member_number as scanned_number
+                FROM family_members fm
+                JOIN members m ON fm.primary_member_id = m.id
+                WHERE fm.member_number = ?
+            ''', (member_number,))
+            member = cursor.fetchone()
+        
+        if member:
+            is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
+            
+            return jsonify({
+                'found': True,
+                'member_number': member_number,
+                'member_name': member['member_name'],
+                'is_active': is_active,
+                'expiry_date': member['expiry_date'],
+                'status': member['status'],
+                'membership_type': member['membership_type']
+            })
+        else:
+            return jsonify({
+                'found': False,
+                'member_number': member_number,
+                'message': 'Member not found'
+            })
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 @app.route('/api/admin/members', methods=['GET'])
 def get_all_members():
     """Get all members (Admin only)"""
