@@ -1,0 +1,2207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Middies Klub Membership System</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:wght@600;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* =========================================
+   MIDDIES KLUB - ENHANCED MOBILE-FIRST CSS
+   Copy this to replace your current <style> section
+   ========================================= */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        :root {
+            /* Enhanced Color Palette */
+            --primary: #059669;
+            --primary-dark: #047857;
+            --primary-light: #10B981;
+            --primary-ultra-light: #D1FAE5;
+            --accent: #F59E0B;
+            --success: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            
+            /* Sophisticated Backgrounds */
+            --bg-base: #FAFDF9;
+            --bg-pattern: #F0FDF4;
+            --card-bg: #FFFFFF;
+            --card-secondary: #F9FAFB;
+            
+            /* Text Colors */
+            --text: #1F2937;
+            --text-secondary: #6B7280;
+            --text-light: #9CA3AF;
+            
+            /* Shadows & Effects */
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            --shadow-primary: 0 10px 30px -5px rgba(5, 150, 105, 0.25);
+            
+            /* Mobile-First Spacing */
+            --spacing-xs: 0.25rem;
+            --spacing-sm: 0.5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+            --spacing-xl: 2rem;
+            --spacing-2xl: 3rem;
+            
+            /* Border Radius */
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
+            --radius-2xl: 1.5rem;
+            --radius-full: 9999px;
+        }
+
+        /* Base Responsive Font Size */
+        html {
+            font-size: 16px;
+        }
+
+        @media (max-width: 768px) {
+            html { font-size: 15px; }
+        }
+
+        @media (max-width: 480px) {
+            html { font-size: 14px; }
+        }
+
+        body {
+            font-family: 'Inter', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-base);
+            color: var(--text);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Beautiful Animated Background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(5, 150, 105, 0.04) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(5, 150, 105, 0.03) 0%, transparent 100%);
+            animation: subtle-move 20s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes subtle-move {
+            0%, 100% { transform: translate(0, 0); }
+            33% { transform: translate(10px, -10px); }
+            66% { transform: translate(-10px, 10px); }
+        }
+
+        /* Typography - Responsive Headers */
+        h1, h2, h3, h4 {
+            font-family: 'Fraunces', 'Playfair Display', serif;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); }
+        h2 { font-size: clamp(1.5rem, 3.5vw, 2rem); }
+        h3 { font-size: clamp(1.25rem, 3vw, 1.5rem); }
+        h4 { font-size: clamp(1.125rem, 2.5vw, 1.25rem); }
+
+        /* Navigation - Mobile Optimized */
+        .nav {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: var(--spacing-md) var(--spacing-lg);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--spacing-md);
+        }
+
+        .nav-brand {
+            font-family: 'Fraunces', 'Playfair Display', serif;
+            font-size: clamp(1.125rem, 2.5vw, 1.5rem);
+            font-weight: 900;
+            color: var(--primary);
+            letter-spacing: -0.02em;
+            flex-shrink: 0;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        #userGreeting {
+            display: none;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .nav-btn {
+            padding: var(--spacing-sm) var(--spacing-md);
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-family: 'DM Sans', 'Inter', sans-serif;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            background: transparent;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover {
+            background: var(--bg-pattern);
+        }
+
+        .nav-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-primary);
+        }
+
+        .nav-btn.danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .nav-btn.danger:hover {
+            background: #DC2626;
+        }
+
+        /* Mobile Nav Adjustments */
+        @media (max-width: 768px) {
+            .nav {
+                padding: var(--spacing-md);
+            }
+
+            .nav-links {
+                gap: var(--spacing-xs);
+            }
+
+            .nav-btn {
+                padding: var(--spacing-sm) 0.75rem;
+                font-size: 0.8125rem;
+            }
+        }
+
+        @media (min-width: 640px) {
+            #userGreeting {
+                display: block;
+            }
+        }
+
+        /* Container - Mobile Padding */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--spacing-xl) var(--spacing-lg);
+            position: relative;
+            z-index: 1;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: var(--spacing-lg) var(--spacing-md);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: var(--spacing-md);
+            }
+        }
+
+        /* View Sections */
+        .view {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { 
+                opacity: 0; 
+                transform: translateY(10px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
+        }
+
+        /* Login Container - Mobile Responsive */
+        .login-container {
+            max-width: 420px;
+            margin: var(--spacing-2xl) auto;
+            background: var(--card-bg);
+            padding: var(--spacing-2xl);
+            border-radius: var(--radius-2xl);
+            box-shadow: var(--shadow-xl);
+            border: 1px solid var(--border-light);
+            position: relative;
+        }
+
+        .login-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--primary-light));
+            border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+        }
+
+        .login-container h2 {
+            text-align: center;
+            margin-bottom: var(--spacing-lg);
+            color: var(--primary);
+        }
+
+        .login-container p {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xl);
+            font-size: 0.9375rem;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                margin: var(--spacing-lg) var(--spacing-md);
+                padding: var(--spacing-xl) var(--spacing-lg);
+                max-width: 100%;
+            }
+        }
+
+        /* Forms - Touch-Friendly */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: var(--text);
+            font-size: 0.875rem;
+            letter-spacing: 0.01em;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 0.875rem var(--spacing-md);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.2s ease;
+            background: var(--card-bg);
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+
+        /* Mobile Input Size Adjustment */
+        @media (max-width: 480px) {
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+        }
+
+        /* Buttons - Touch-Friendly */
+        .btn {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-size: 1rem;
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-sm);
+            min-height: 48px; /* Touch target size */
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-primary);
+        }
+
+        .btn-primary:hover,
+        .btn-primary:active {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 12px 35px -5px rgba(5, 150, 105, 0.35);
+        }
+
+        .btn-secondary {
+            background: var(--card-secondary);
+            color: var(--text);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-light);
+        }
+
+        /* Alerts */
+        .alert {
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--spacing-lg);
+            font-size: 0.9375rem;
+            line-height: 1.6;
+        }
+
+        .alert.error {
+            background: #FEF2F2;
+            border: 1px solid #FECACA;
+            color: #991B1B;
+        }
+
+        .alert.success {
+            background: #F0FDF4;
+            border: 1px solid #BBF7D0;
+            color: #166534;
+        }
+
+        .alert.warning {
+            background: #FFFBEB;
+            border: 1px solid #FEF3C7;
+            color: #92400E;
+        }
+
+        /* Membership Card - Mobile Optimized */
+        .membership-card {
+            max-width: 400px;
+            margin: var(--spacing-xl) auto;
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            border-radius: var(--radius-2xl);
+            padding: var(--spacing-xl);
+            box-shadow: var(--shadow-xl), var(--shadow-primary);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .membership-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 60%);
+            animation: shimmer 10s infinite ease-in-out;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-5%, -5%) rotate(30deg); }
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--spacing-lg);
+            position: relative;
+            z-index: 1;
+        }
+
+        .card-logo {
+            font-family: 'Fraunces', 'Playfair Display', serif;
+            font-weight: 900;
+            font-size: 1.25rem;
+            letter-spacing: -0.02em;
+        }
+
+        .card-status {
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--radius-full);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card-status.active {
+            background: var(--success);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+        }
+
+        .card-status.expired {
+            background: var(--danger);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+
+        .card-body {
+            position: relative;
+            z-index: 1;
+        }
+
+        .member-photo {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(255,255,255,0.3);
+            margin-bottom: var(--spacing-md);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .member-name {
+            font-family: 'Fraunces', 'Playfair Display', serif;
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-sm);
+            font-weight: 700;
+        }
+
+        .member-info {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+            font-size: 0.875rem;
+            opacity: 0.95;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .info-label {
+            font-weight: 500;
+            opacity: 0.8;
+        }
+
+        .info-value {
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .qr-container {
+            background: white;
+            padding: var(--spacing-md);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: var(--spacing-lg);
+        }
+
+        @media (max-width: 480px) {
+            .membership-card {
+                margin: var(--spacing-lg) 0;
+                padding: var(--spacing-lg);
+            }
+
+            .member-photo {
+                width: 80px;
+                height: 80px;
+            }
+
+            .member-name {
+                font-size: 1.25rem;
+            }
+
+            .member-info {
+                font-size: 0.8125rem;
+            }
+        }
+
+        /* Points Card - Eye-Catching */
+        .points-card {
+            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+            color: white;
+            padding: var(--spacing-xl);
+            border-radius: var(--radius-2xl);
+            text-align: center;
+            margin: var(--spacing-xl) auto;
+            max-width: 400px;
+            box-shadow: var(--shadow-xl), 0 10px 30px -5px rgba(245, 158, 11, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .points-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 60%);
+            animation: shimmer 10s infinite ease-in-out reverse;
+        }
+
+        .points-value {
+            font-family: 'Fraunces', 'Playfair Display', serif;
+            font-size: clamp(2.5rem, 8vw, 3.5rem);
+            font-weight: 900;
+            margin-bottom: var(--spacing-sm);
+            position: relative;
+            z-index: 1;
+        }
+
+        .points-label {
+            font-size: 1rem;
+            font-weight: 600;
+            opacity: 0.95;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: relative;
+            z-index: 1;
+        }
+
+        .points-sublabel {
+            margin-top: var(--spacing-md);
+            font-size: 0.875rem;
+            opacity: 0.85;
+            position: relative;
+            z-index: 1;
+        }
+
+        @media (max-width: 480px) {
+            .points-card {
+                margin: var(--spacing-lg) 0;
+                padding: var(--spacing-lg);
+            }
+        }
+
+        /* Section Cards */
+        .section-card {
+            background: var(--card-bg);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-light);
+        }
+
+        .section-card h3 {
+            margin-bottom: var(--spacing-lg);
+            color: var(--primary);
+            padding-bottom: var(--spacing-md);
+            border-bottom: 2px solid var(--border-light);
+        }
+
+        @media (max-width: 768px) {
+            .section-card {
+                padding: var(--spacing-lg);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .section-card {
+                padding: var(--spacing-md);
+            }
+        }
+
+        /* Attendance Items - Mobile Touch Targets */
+        .attendance-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .attendance-item {
+            padding: var(--spacing-md);
+            background: var(--card-secondary);
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--success);
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: var(--spacing-md);
+            align-items: center;
+            transition: all 0.2s ease;
+            min-height: 64px; /* Touch target */
+        }
+
+        .attendance-item:active {
+            background: var(--border-light);
+            transform: scale(0.98);
+        }
+
+        .attendance-item.denied {
+            border-left-color: var(--danger);
+        }
+
+        .attendance-info {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+
+        .attendance-event {
+            font-weight: 600;
+            color: var(--text);
+            font-size: 0.9375rem;
+        }
+
+        .attendance-time {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+        }
+
+        .attendance-points {
+            font-weight: 700;
+            color: var(--success);
+            font-size: 1.125rem;
+            white-space: nowrap;
+        }
+
+        .attendance-points.denied {
+            color: var(--danger);
+        }
+
+        @media (max-width: 480px) {
+            .attendance-item {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-sm);
+            }
+
+            .attendance-points {
+                font-size: 1rem;
+            }
+        }
+
+        /* Admin Stats - Mobile Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-2xl);
+        }
+
+        .stat-card {
+            background: white;
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-light);
+            text-align: center;
+            transition: all 0.2s ease;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .stat-card:active {
+            transform: scale(0.98);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-value {
+            font-family: 'Fraunces', 'Playfair Display', serif;
+            font-size: clamp(1.75rem, 5vw, 2.25rem);
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .stat-label {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        @media (max-width: 640px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: var(--spacing-md);
+            }
+
+            .stat-card {
+                padding: var(--spacing-md);
+                min-height: 100px;
+            }
+        }
+
+        /* Upload Area - Touch Friendly */
+        .upload-area {
+            border: 3px dashed var(--border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-2xl);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--card-secondary);
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .upload-area:hover,
+        .upload-area:active,
+        .upload-area.drag-over {
+            border-color: var(--primary);
+            background: var(--primary-ultra-light);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: var(--spacing-md);
+        }
+
+        @media (max-width: 480px) {
+            .upload-area {
+                padding: var(--spacing-xl);
+                min-height: 160px;
+            }
+
+            .upload-icon {
+                font-size: 2.5rem;
+            }
+        }
+
+        /* Tables - Mobile Scrollable */
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 0 calc(var(--spacing-md) * -1);
+            padding: 0 var(--spacing-md);
+        }
+
+        .data-table {
+            width: 100%;
+            min-width: 600px;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: white;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .data-table thead {
+            background: var(--primary);
+            color: white;
+        }
+
+        .data-table th {
+            padding: var(--spacing-md);
+            font-weight: 600;
+            text-align: left;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: sticky;
+            top: 0;
+            background: var(--primary);
+        }
+
+        .data-table td {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border-light);
+            font-size: 0.9375rem;
+        }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .data-table tbody tr:active {
+            background: var(--bg-pattern);
+        }
+
+        @media (max-width: 768px) {
+            .data-table {
+                font-size: 0.875rem;
+                min-width: 500px;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: var(--spacing-sm) var(--spacing-md);
+            }
+        }
+
+        /* Scanner - Mobile Optimized */
+        .scanner-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .scanner-video-container {
+            position: relative;
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            background: #000;
+            box-shadow: var(--shadow-xl);
+            aspect-ratio: 16 / 9;
+        }
+
+        #scannerVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scanner-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 300px;
+            aspect-ratio: 1;
+            border: 3px solid var(--success);
+            border-radius: var(--radius-xl);
+            pointer-events: none;
+        }
+
+        .scanner-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-xl);
+        }
+
+        .scan-result {
+            margin-top: var(--spacing-xl);
+            padding: var(--spacing-xl);
+            border-radius: var(--radius-xl);
+            text-align: center;
+            font-size: 1.125rem;
+            font-weight: 600;
+            box-shadow: var(--shadow-lg);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .scan-result.success {
+            background: #F0FDF4;
+            color: #166534;
+            border: 2px solid var(--success);
+        }
+
+        .scan-result.error {
+            background: #FEF2F2;
+            color: #991B1B;
+            border: 2px solid var(--danger);
+        }
+
+        /* Loading States */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(5, 150, 105, 0.2);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Family Cards - Grid Layout */
+        .family-cards {
+            display: grid;
+            gap: var(--spacing-lg);
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        }
+
+        .family-card {
+            background: white;
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-light);
+            transition: all 0.2s ease;
+        }
+
+        .family-card:active {
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.98);
+        }
+
+        @media (max-width: 640px) {
+            .family-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Utility Classes */
+        .text-center { text-align: center; }
+        .text-secondary { color: var(--text-secondary); }
+        .hidden { display: none !important; }
+
+        /* Safe Area Support for iOS */
+        @supports (padding: max(0px)) {
+            .container {
+                padding-left: max(var(--spacing-md), env(safe-area-inset-left));
+                padding-right: max(var(--spacing-md), env(safe-area-inset-right));
+            }
+
+            .nav {
+                padding-left: max(var(--spacing-md), env(safe-area-inset-left));
+                padding-right: max(var(--spacing-md), env(safe-area-inset-right));
+            }
+        }
+
+        /* Landscape Mobile Adjustments */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .container {
+                padding-top: var(--spacing-md);
+                padding-bottom: var(--spacing-md);
+            }
+
+            .login-container,
+            .membership-card,
+            .points-card {
+                margin-top: var(--spacing-md);
+                margin-bottom: var(--spacing-md);
+            }
+        }
+
+        /* Dark Mode Support (Optional) */
+        @media (prefers-color-scheme: dark) {
+            /* Uncomment to enable dark mode */
+            /*
+            :root {
+                --bg-base: #111827;
+                --card-bg: #1F2937;
+                --text: #F9FAFB;
+                --text-secondary: #9CA3AF;
+                --border: #374151;
+            }
+            */
+        }
+
+        /* Print Styles */
+        @media print {
+            body::before { display: none !important; }
+            .nav, .btn, .scanner-controls { display: none !important; }
+            .membership-card, .section-card { break-inside: avoid; page-break-inside: avoid; }
+            * { box-shadow: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav" id="mainNav" style="display: none;">
+        <div class="nav-brand">Middies Klub</div>
+        <div class="nav-links">
+            <span id="userGreeting" style="margin-right: 1rem; color: var(--text-secondary); font-weight: 500;"></span>
+            <button class="nav-btn" id="navMyCard" onclick="showView('member')">My Card</button>
+            <button class="nav-btn" id="navScanner" onclick="showView('scanner')" style="display: none;">Scanner</button>
+            <button class="nav-btn" id="navAdmin" onclick="showView('admin')" style="display: none;">Admin</button>
+            <button class="nav-btn danger" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <!-- Login View -->
+    <div id="loginView" class="view active">
+        <div class="container">
+            <div class="login-container">
+                <h2>Middies Klub Member Login</h2>
+                <div id="loginError" class="alert error" style="display: none;"></div>
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label for="loginEmail">Email Address</label>
+                        <input type="email" id="loginEmail" placeholder="your.email@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" placeholder="Your password (default: your email)" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+                <p style="text-align: center; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                    Enter your username and password to access your membership.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Member View -->
+    <div id="memberView" class="view">
+        <div class="container">
+            <div id="memberCardContainer"></div>
+            
+            <div class="points-card">
+                <div class="points-value" id="memberPoints">0</div>
+                <div class="points-label">Loyalty Points</div>
+                <p style="text-align: center; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                    Earn 10 points per event attendance!
+                </p>
+            </div>
+
+            <div class="attendance-section">
+                <h3 style="margin-bottom: 1rem; color: var(--primary);">Change Password</h3>
+                <div id="passwordChangeError" class="alert error" style="display: none;"></div>
+                <div id="passwordChangeSuccess" class="alert success" style="display: none;"></div>
+                <form onsubmit="handleChangePassword(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="currentPassword">Current Password</label>
+                        <input type="password" id="currentPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">New Password (min 6 characters)</label>
+                        <input type="password" id="newPassword" minlength="6" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" minlength="6" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Change Password</button>
+                </form>
+            </div>
+
+            <div class="attendance-section" style="margin-top: 2rem;">
+                <h3 style="margin-bottom: 1rem; color: var(--primary);">My Attendance History</h3>
+                <div id="attendanceHistory"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scanner View (Admin Only) -->
+    <div id="scannerView" class="view">
+        <div class="container">
+            <div class="scanner-container">
+                <h2 style="text-align: center; margin-bottom: 1.5rem; color: var(--primary);">QR Code Scanner</h2>
+                
+                <div class="form-group">
+                    <label for="eventName">Event Name (Optional)</label>
+                    <input type="text" id="eventName" placeholder="e.g., Sports Day, Parent Meeting" value="General Access">
+                </div>
+
+                <video id="scanner-video" playsinline></video>
+                <canvas id="scanner-canvas" style="display: none;"></canvas>
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                    <button class="btn btn-primary" id="startScanBtn" onclick="startScanner()">Start Scanner</button>
+                    <button class="btn btn-secondary" id="stopScanBtn" onclick="stopScanner()" style="display: none;">Stop Scanner</button>
+                </div>
+                <div id="scanResult" class="scan-result"></div>
+                
+                <div style="margin-top: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">Recent Scans</h3>
+                    <div id="recentScans"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin View -->
+    <div id="adminView" class="view">
+        <div class="container">
+            <h1 style="margin-bottom: 2rem; color: var(--primary);">Admin Dashboard</h1>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="statActiveMembers">0</div>
+                    <div class="stat-label">Active Members</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statExpiringSoon">0</div>
+                    <div class="stat-label">Expiring Soon (30 days)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statTodayAttendance">0</div>
+                    <div class="stat-label">Today's Attendance</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statTotalPoints">0</div>
+                    <div class="stat-label">Total Points Awarded</div>
+                </div>
+            </div>
+
+            <div class="upload-section">
+                <h3 style="margin-bottom: 1rem;">Create New Admin Account</h3>
+                <div id="createAdminError" class="alert error" style="display: none;"></div>
+                <div id="createAdminSuccess" class="alert success" style="display: none;"></div>
+                <form onsubmit="handleCreateAdmin(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="adminMemberNumber">Member Number</label>
+                        <input type="text" id="adminMemberNumber" placeholder="M0001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminFirstName">First Name</label>
+                        <input type="text" id="adminFirstName" placeholder="John" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminSurname">Surname</label>
+                        <input type="text" id="adminSurname" placeholder="Doe" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminEmail">Email / Username</label>
+                        <input type="text" id="adminEmail" placeholder="admin@school.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adminPassword">Password</label>
+                        <input type="password" id="adminPassword" placeholder="Min 6 characters" minlength="6" required>
+                    </div>
+                    <div style="display: flex; align-items: flex-end;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Create Admin</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="upload-section">
+                <h3 style="margin-bottom: 1rem;">Import Member Data (Excel)</h3>
+                <div class="alert info" style="margin-bottom: 1rem;">
+                    <strong>Required columns in Excel:</strong> Member Number, First Name, Surname, Email, Phone, Membership Type, Expiry Date, Status, Is Admin (Yes/No)
+                </div>
+                <div class="upload-area" id="uploadArea">
+                    <p style="font-size: 3rem; margin-bottom: 0.5rem;">📊</p>
+                    <p style="font-weight: 600; margin-bottom: 0.5rem;">Drop Excel file here or click to upload</p>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">Exports from Google Forms are supported</p>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+                </div>
+                <button class="btn btn-secondary" onclick="showExpiringMembers()" style="margin-top: 1rem;">View Expiring Members (For Renewal Emails)</button>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <h3 style="color: var(--primary); margin: 0;">All Members</h3>
+                    <input type="text" class="search-box" id="adminSearch" placeholder="Search members..." onkeyup="filterMembers()">
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Member #</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Role</th>
+                            <th>Points</th>
+                            <th>Attendance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminMembersTable"></tbody>
+                </table>
+            </div>
+
+            <div class="table-container" style="margin-top: 2rem;">
+                <div class="table-header">
+                    <h3 style="color: var(--primary); margin: 0;">Recent Attendance</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Member</th>
+                            <th>Event</th>
+                            <th>Scanned By</th>
+                            <th>Time</th>
+                            <th>Status</th>
+                            <th>Points</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminAttendanceTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expiring Members Modal -->
+    <div id="expiringModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Expiring Members (Renewal Reminders)</h3>
+                <button class="modal-close" onclick="closeModal('expiringModal')">&times;</button>
+            </div>
+            <div id="expiringMembersList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - auto-detects production vs development
+        const API_BASE = window.location.origin + '/api';
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+        let scannerStream = null;
+        let scannerInterval = null;
+        let lastScannedCode = null;
+        let isProcessing = false;
+        
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', async function() {
+            if (authToken) {
+                await loadUserData();
+            }
+            setupUploadArea();
+        });
+
+        // Authentication
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+            const password = document.getElementById('loginPassword').value.trim();
+            
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email, password: password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    currentUser = data.member;
+                    currentUser.role = data.role;
+                    
+                    await loadUserData();
+                } else {
+                    document.getElementById('loginError').textContent = data.error || 'Login failed';
+                    document.getElementById('loginError').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Connection error. Is the server running?';
+                document.getElementById('loginError').style.display = 'block';
+            }
+        }
+
+        async function handleChangePassword(event) {
+            event.preventDefault();
+            
+            const currentPassword = document.getElementById('currentPassword').value.trim();
+            const newPassword = document.getElementById('newPassword').value.trim();
+            const confirmPassword = document.getElementById('confirmPassword').value.trim();
+            
+            const errorDiv = document.getElementById('passwordChangeError');
+            const successDiv = document.getElementById('passwordChangeSuccess');
+            
+            // Hide previous messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            // Validate passwords match
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = 'New passwords do not match';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/member/change-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authToken
+                    },
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    successDiv.textContent = 'Password changed successfully!';
+                    successDiv.style.display = 'block';
+                    // Clear form
+                    document.getElementById('currentPassword').value = '';
+                    document.getElementById('newPassword').value = '';
+                    document.getElementById('confirmPassword').value = '';
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to change password';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function handleCreateAdmin(event) {
+            event.preventDefault();
+            
+            const memberNumber = document.getElementById('adminMemberNumber').value.trim();
+            const firstName = document.getElementById('adminFirstName').value.trim();
+            const surname = document.getElementById('adminSurname').value.trim();
+            const email = document.getElementById('adminEmail').value.trim();
+            const password = document.getElementById('adminPassword').value.trim();
+            
+            const errorDiv = document.getElementById('createAdminError');
+            const successDiv = document.getElementById('createAdminSuccess');
+            
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/create-admin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authToken
+                    },
+                    body: JSON.stringify({
+                        member_number: memberNumber,
+                        first_name: firstName,
+                        surname: surname,
+                        email: email,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    successDiv.textContent = `Admin created successfully! Username: ${email}, Password: ${password}`;
+                    successDiv.style.display = 'block';
+                    // Clear form
+                    document.getElementById('adminMemberNumber').value = '';
+                    document.getElementById('adminFirstName').value = '';
+                    document.getElementById('adminSurname').value = '';
+                    document.getElementById('adminEmail').value = '';
+                    document.getElementById('adminPassword').value = '';
+                    // Refresh admin data
+                    loadAdminData();
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to create admin';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function loadUserData() {
+            try {
+                const response = await fetch(`${API_BASE}/member/profile`, {
+                    headers: { 'Authorization': authToken }
+                });
+                
+                if (!response.ok) {
+                    logout();
+                    return;
+                }
+                
+                const data = await response.json();
+                currentUser = { ...data.member, role: data.member.is_admin ? 'admin' : 'member' };
+                
+                // Update UI
+                document.getElementById('loginView').classList.remove('active');
+                document.getElementById('mainNav').style.display = 'flex';
+                document.getElementById('userGreeting').textContent = `Hello, ${currentUser.first_name}!`;
+                
+                // Show appropriate buttons based on role
+                if (currentUser.role === 'admin') {
+                    document.getElementById('navAdmin').style.display = 'block';
+                    document.getElementById('navScanner').style.display = 'block';
+                }
+                
+                // Load member card
+                displayMemberCard(data.member, data.family_members);
+                displayAttendance(data.attendance);
+                
+                showView('member');
+                
+                // Load admin data if admin
+                if (currentUser.role === 'admin') {
+                    loadAdminData();
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                logout();
+            }
+        }
+
+        function logout() {
+
+            stopScanner();
+
+            localStorage.removeItem('authToken');
+            authToken = null;
+            currentUser = null;
+            
+            document.getElementById('mainNav').style.display = 'none';
+            document.getElementById('loginView').classList.add('active');
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            
+            // Clear login form
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginError').style.display = 'none';
+        }
+
+        // View Management
+        function showView(viewName) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewName + 'View').classList.add('active');
+            
+            // Update active nav button
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById('nav' + viewName.charAt(0).toUpperCase() + viewName.slice(1));
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        // Display Member Card
+        function displayMemberCard(member, familyMembers) {
+            const container = document.getElementById('memberCardContainer');
+            const statusClass = member.status === 'active' ? 'active' : 'expired';
+            const statusText = member.status === 'active' ? '✓ Active' : '✗ Expired';
+
+            let html = `
+                <div class="membership-card">
+                    <div class="card-header">
+                        <div class="card-logo">Middies Klub</div>
+                        <div class="card-status ${statusClass}">${statusText}</div>
+                    </div>
+                    <div class="card-body">
+                        <img src="${member.photo_url}" alt="${member.first_name} ${member.surname}" class="member-photo" onerror="this.src='https://ui-avatars.com/api/?name=${member.first_name}+${member.surname}&size=100&background=059669&color=fff'">
+                        <div class="member-name">${member.first_name} ${member.surname}</div>
+                        <div class="member-info">
+                            <div class="info-row">
+                                <span class="info-label">Member #:</span>
+                                <span>${member.member_number}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Type:</span>
+                                <span>${member.membership_type}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Valid Until:</span>
+                                <span>${new Date(member.expiry_date).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                        <div class="qr-container">
+                            <div id="memberQR"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Add family members
+            if (familyMembers && familyMembers.length > 0) {
+                html += `
+                    <div style="max-width: 400px; margin: 1rem auto; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px var(--shadow);">
+                        <h3 style="margin-bottom: 1rem; color: var(--primary);">Family Members</h3>
+                `;
+                
+                familyMembers.forEach((fm, index) => {
+                    html += `
+                        <div style="padding: 1rem; border: 2px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem;">
+                            <strong>${fm.name}</strong> (${fm.relationship})
+                            <br>
+                            <small style="color: var(--text-secondary);">Code: ${fm.member_number}</small>
+                            <div id="familyQR${index}" style="margin-top: 0.5rem;"></div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+
+            // Generate main QR Code
+            new QRCode(document.getElementById('memberQR'), {
+                text: JSON.stringify({
+                    member_number: member.member_number,
+                    name: `${member.first_name} ${member.surname}`,
+                    status: member.status,
+                    expiry: member.expiry_date
+                }),
+                width: 200,
+                height: 200
+            });
+
+            // Generate family member QR codes
+            if (familyMembers && familyMembers.length > 0) {
+                familyMembers.forEach((fm, index) => {
+                    new QRCode(document.getElementById(`familyQR${index}`), {
+                        text: JSON.stringify({
+                            member_number: fm.member_number,
+                            name: fm.name,
+                            status: member.status,
+                            expiry: member.expiry_date
+                        }),
+                        width: 150,
+                        height: 150
+                    });
+                });
+            }
+
+            // Update points display
+            document.getElementById('memberPoints').textContent = member.points || 0;
+        }
+
+        // Display Attendance History
+        function displayAttendance(attendance) {
+            const container = document.getElementById('attendanceHistory');
+            
+            if (!attendance || attendance.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No attendance records yet.</p>';
+                return;
+            }
+
+            container.innerHTML = attendance.map(record => `
+                <div class="attendance-item">
+                    <div>
+                        <strong>${record.event_name || 'Event'}</strong>
+                        <br>
+                        <small style="color: var(--text-secondary);">${new Date(record.timestamp).toLocaleString()}</small>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="badge ${record.status}">${record.status === 'granted' ? '✓ Granted' : '✗ Denied'}</span>
+                        ${record.points_awarded > 0 ? `<br><small style="color: var(--success); font-weight: 600;">+${record.points_awarded} pts</small>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Scanner Functions (Admin Only)
+        function startScanner() {
+            const video = document.getElementById('scanner-video');
+            const canvas = document.getElementById('scanner-canvas');
+            const context = canvas.getContext('2d');
+
+            // Reset scanner state
+            lastScannedCode = null;
+            isProcessing = false;
+
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                .then(stream => {
+                    scannerStream = stream;
+                    video.srcObject = stream;
+                    video.play();
+
+                    document.getElementById('startScanBtn').style.display = 'none';
+                    document.getElementById('stopScanBtn').style.display = 'block';
+
+                    scannerInterval = setInterval(() => {
+                        if (video.readyState === video.HAVE_ENOUGH_DATA && !isProcessing) {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            
+                            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                            const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                            if (code) {
+                                const qrData = code.data;
+                                if (qrData !== lastScannedCode) {
+                                    lastScannedCode = qrData;
+                                    isProcessing = true;
+                                    handleQRDetection(qrData);
+                                }
+                            }
+                        }
+                    }, 300);
+                })
+                .catch(err => {
+                    alert('❌ Camera access denied: ' + err.message);
+                });
+        }
+
+        function stopScanner() {
+            if (scannerStream) {
+                scannerStream.getTracks().forEach(track => track.stop());
+                scannerStream = null;
+            }
+            if (scannerInterval) {
+                clearInterval(scannerInterval);
+                scannerInterval = null;
+            }
+
+            document.getElementById('scanner-video').srcObject = null;
+            document.getElementById('startScanBtn').style.display = 'block';
+            document.getElementById('stopScanBtn').style.display = 'none';
+        }
+
+        
+
+        function handleQRDetection(qrData) {
+            try {
+                const data = JSON.parse(qrData);
+                showConfirmationModal(data);
+            } catch (error) {
+                // If not JSON, try direct member number
+                if (qrData.trim().length > 0) {
+                    showConfirmationModal({ member_number: qrData.trim() });
+                } else {
+                    isProcessing = false;
+                    lastScannedCode = null;
+                }
+            }
+        }
+
+        function showConfirmationModal(qrData) {
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('scanConfirmModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'scanConfirmModal';
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header">
+                            <h3>🔍 Confirm Scan</h3>
+                            <button class="modal-close" onclick="cancelScan()">&times;</button>
+                        </div>
+                        <div id="scanConfirmContent" style="padding: 1rem;">
+                            <div id="scanLoading" style="text-align: center; padding: 2rem;">
+                                <div style="font-size: 3rem; margin-bottom: 1rem;">⏳</div>
+                                <p>Loading member info...</p>
+                            </div>
+                            <div id="scanInfo" style="display: none;">
+                                <div style="text-align: center; margin-bottom: 1.5rem;">
+                                    <h3 id="scanMemberName" style="color: var(--primary); margin-bottom: 0.5rem;"></h3>
+                                    <p><strong>Member #:</strong> <span id="scanMemberNumber"></span></p>
+                                    <p><strong>Status:</strong> <span id="scanStatus"></span></p>
+                                    <p><strong>Event:</strong> <span id="scanEventName"></span></p>
+                                    <p><strong>Time:</strong> <span id="scanTime"></span></p>
+                                </div>
+                                <div style="display: flex; gap: 1rem;">
+                                    <button onclick="confirmScan()" style="flex: 1; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem;">
+                                        ✅ CONFIRM SCAN
+                                    </button>
+                                    <button onclick="cancelScan()" style="flex: 1; padding: 12px; background: var(--danger); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem;">
+                                        ❌ CANCEL
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+
+            // Show modal
+            modal.style.display = 'flex';
+            
+            // Set event name
+            const eventName = document.getElementById('eventName').value || 'General Access';
+            document.getElementById('scanEventName').textContent = eventName;
+            document.getElementById('scanTime').textContent = new Date().toLocaleTimeString();
+            document.getElementById('scanMemberNumber').textContent = qrData.member_number;
+            
+            // Show loading, hide info
+            document.getElementById('scanLoading').style.display = 'block';
+            document.getElementById('scanInfo').style.display = 'none';
+            
+            // Fetch member info
+            fetchMemberInfo(qrData.member_number);
+        }
+
+        async function fetchMemberInfo(memberNumber) {
+            try {
+                const response = await fetch(`${API_BASE}/member-info/${memberNumber}`, {
+                    headers: { 'Authorization': authToken }
+                });
+                
+                const data = await response.json();
+                
+                // Update modal with member info
+                const scanInfo = document.getElementById('scanInfo');
+                const scanLoading = document.getElementById('scanLoading');
+                
+                if (data.found) {
+                    document.getElementById('scanMemberName').textContent = data.member_name;
+                    document.getElementById('scanStatus').innerHTML = data.is_active ? 
+                        '<span style="color: var(--success); font-weight: 600;">✅ ACTIVE</span>' :
+                        '<span style="color: var(--danger); font-weight: 600;">❌ INACTIVE</span>';
+                    document.getElementById('scanEventName').textContent = document.getElementById('eventName').value || 'General Access';
+                    
+                    // Show expiration if not active
+                    if (!data.is_active) {
+                        const statusEl = document.getElementById('scanStatus');
+                        statusEl.innerHTML += `<br><small style="color: var(--danger);">Expired: ${new Date(data.expiry_date).toLocaleDateString()}</small>`;
+                    }
+                } else {
+                    document.getElementById('scanMemberName').textContent = 'Member Not Found';
+                    document.getElementById('scanStatus').innerHTML = '<span style="color: var(--danger); font-weight: 600;">❌ NOT FOUND</span>';
+                }
+                
+                // Show info, hide loading
+                scanLoading.style.display = 'none';
+                scanInfo.style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error fetching member info:', error);
+                document.getElementById('scanLoading').innerHTML = `
+                    <div style="color: var(--danger); text-align: center;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+                        <p>Error loading member info</p>
+                    </div>`;
+            }
+        }
+
+        async function confirmScan() {
+            const modal = document.getElementById('scanConfirmModal');
+            const memberNumber = document.getElementById('scanMemberNumber').textContent;
+            const eventName = document.getElementById('eventName').value || 'General Access';
+            
+            // Disable confirm button and show processing
+            const confirmBtn = modal.querySelector('button[onclick="confirmScan()"]');
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = 'Processing...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/scan`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authToken
+                    },
+                    body: JSON.stringify({
+                        member_number: memberNumber,
+                        event_name: eventName
+                    })
+                });
+
+                const result = await response.json();
+                
+                // Hide modal
+                modal.style.display = 'none';
+                
+                // Show result toast
+                showScanResult(result);
+                
+                // Add to recent scans
+                addRecentScan(result);
+                
+                // Reload admin data if admin
+                if (currentUser && currentUser.role === 'admin') {
+                    loadAdminData();
+                }
+                
+            } catch (error) {
+                console.error('Scan error:', error);
+                alert('Scan failed: ' + error.message);
+            }
+            
+            // Resume scanning after delay
+            setTimeout(() => {
+                isProcessing = false;
+                lastScannedCode = null;
+                // Re-enable button
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = '✅ CONFIRM SCAN';
+                }
+            }, 2000);
+        }
+
+        function cancelScan() {
+            const modal = document.getElementById('scanConfirmModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+            
+            // Resume scanning immediately
+            isProcessing = false;
+            lastScannedCode = null;
+        }
+
+        function showScanResult(result) {
+            // Create or update result toast
+            let toast = document.getElementById('scanResultToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'scanResultToast';
+                toast.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 9999;
+                    padding: 20px;
+                    border-radius: 12px;
+                    color: white;
+                    font-weight: 600;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+                    animation: slideIn 0.3s ease-out;
+                    min-width: 300px;
+                    max-width: 400px;
+                    backdrop-filter: blur(10px);
+                `;
+                document.body.appendChild(toast);
+            }
+            
+            // Set toast content based on result
+            if (result.success && result.status === 'granted') {
+                toast.style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)';
+                toast.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <div style="font-size: 24px;">✅</div>
+                        <h4 style="margin: 0; font-size: 1.2em;">SCAN SUCCESSFUL!</h4>
+                    </div>
+                    <p style="margin: 0 0 8px 0; font-size: 1.1em;"><strong>${result.member_name}</strong></p>
+                    <p style="margin: 0 0 8px 0;">Access: <span style="font-weight: 800; font-size: 1.1em;">GRANTED</span></p>
+                    <p style="margin: 0 0 8px 0;">Points Awarded: <span style="font-weight: 800; font-size: 1.1em;">+${result.points_awarded}</span></p>
+                    <p style="margin: 0; opacity: 0.9; font-size: 0.9em;">${result.message}</p>
+                `;
+            } else {
+                toast.style.background = 'linear-gradient(135deg, var(--danger) 0%, #991B1B 100%)';
+                toast.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <div style="font-size: 24px;">❌</div>
+                        <h4 style="margin: 0; font-size: 1.2em;">SCAN DENIED</h4>
+                    </div>
+                    <p style="margin: 0 0 8px 0; font-size: 1.1em;"><strong>${result.member_name || 'Unknown Member'}</strong></p>
+                    <p style="margin: 0 0 8px 0;">Access: <span style="font-weight: 800; font-size: 1.1em;">DENIED</span></p>
+                    <p style="margin: 0; opacity: 0.9; font-size: 0.9em;">${result.message || 'Membership not active'}</p>
+                `;
+            }
+            
+            // Auto-hide after 4 seconds
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 4000);
+        }
+
+        function addRecentScan(result) {
+            const recentScansDiv = document.getElementById('recentScans');
+            const scanTime = new Date().toLocaleTimeString();
+            const scanHtml = `
+                <div style="padding: 1rem; background: ${result.status === 'granted' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 8px; margin-bottom: 0.5rem;">
+                    <strong>${result.member_name}</strong><br>
+                    <small>${scanTime} - ${result.message}</small>
+                    ${result.points_awarded > 0 ? `<br><small style="font-weight: 600;">+${result.points_awarded} points awarded</small>` : ''}
+                </div>
+            `;
+            recentScansDiv.insertAdjacentHTML('afterbegin', scanHtml);
+        }
+
+        // Admin Functions
+        async function loadAdminData() {
+            try {
+                // Load stats
+                const statsResponse = await fetch(`${API_BASE}/admin/stats`, {
+                    headers: { 'Authorization': authToken }
+                });
+                const stats = await statsResponse.json();
+                
+                document.getElementById('statActiveMembers').textContent = stats.active_members;
+                document.getElementById('statExpiringSoon').textContent = stats.expiring_soon;
+                document.getElementById('statTodayAttendance').textContent = stats.today_attendance;
+                document.getElementById('statTotalPoints').textContent = stats.total_points;
+
+                // Load members
+                const membersResponse = await fetch(`${API_BASE}/admin/members`, {
+                    headers: { 'Authorization': authToken }
+                });
+                const membersData = await membersResponse.json();
+                
+                const tbody = document.getElementById('adminMembersTable');
+                tbody.innerHTML = membersData.members.map(m => `
+                    <tr>
+                        <td><strong>${m.member_number}</strong></td>
+                        <td>${m.first_name} ${m.surname}</td>
+                        <td>${m.email}</td>
+                        <td>${m.membership_type}</td>
+                        <td><span class="badge ${m.status}">${m.status}</span></td>
+                        <td><span class="badge ${m.is_admin ? 'admin' : 'member'}">${m.is_admin ? 'Admin' : 'Member'}</span></td>
+                        <td>${m.points}</td>
+                        <td>${m.attendance_count || 0}</td>
+                    </tr>
+                `).join('');
+
+                // Load attendance
+                const attendanceResponse = await fetch(`${API_BASE}/admin/attendance`, {
+                    headers: { 'Authorization': authToken }
+                });
+                const attendanceData = await attendanceResponse.json();
+                
+                const atbody = document.getElementById('adminAttendanceTable');
+                atbody.innerHTML = attendanceData.attendance.map(a => `
+                    <tr>
+                        <td>${a.member_name}</td>
+                        <td>${a.event_name || 'General'}</td>
+                        <td>${a.scanned_by}</td>
+                        <td>${new Date(a.timestamp).toLocaleString()}</td>
+                        <td><span class="badge ${a.status}">${a.status}</span></td>
+                        <td>+${a.points_awarded}</td>
+                    </tr>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error loading admin data:', error);
+            }
+        }
+
+        function filterMembers() {
+            const searchTerm = document.getElementById('adminSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#adminMembersTable tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        }
+
+        async function showExpiringMembers() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/expiring-members`, {
+                    headers: { 'Authorization': authToken }
+                });
+                const data = await response.json();
+                
+                const modal = document.getElementById('expiringModal');
+                const list = document.getElementById('expiringMembersList');
+                
+                if (data.expiring_members.length === 0) {
+                    list.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No members expiring in the next 30 days.</p>';
+                } else {
+                    let html = `<p style="margin-bottom: 1rem;"><strong>${data.expiring_members.length} members</strong> expiring within 30 days:</p>`;
+                    html += '<div style="max-height: 400px; overflow-y: auto;">';
+                    
+                    data.expiring_members.forEach(m => {
+                        html += `
+                            <div style="padding: 1rem; border: 2px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem;">
+                                <strong>${m.first_name} ${m.surname}</strong> (${m.member_number})<br>
+                                <small>Email: ${m.email}</small><br>
+                                <small>Expires: ${new Date(m.expiry_date).toLocaleDateString()}</small><br>
+                                <small>Type: ${m.membership_type}</small>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    html += `
+                        <div style="margin-top: 1rem; padding: 1rem; background: var(--bg); border-radius: 8px;">
+                            <strong>Email Template:</strong>
+                            <p style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">
+                                Copy the emails above and send renewal reminders with bank details and membership fees (Solo: R500, Family: R800).
+                            </p>
+                        </div>
+                    `;
+                    
+                    list.innerHTML = html;
+                }
+                
+                modal.classList.add('active');
+            } catch (error) {
+                console.error('Error fetching expiring members:', error);
+                alert('Error loading expiring members');
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // File Upload
+        function setupUploadArea() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+
+            uploadArea.addEventListener('click', () => fileInput.click());
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.style.borderColor = 'var(--primary)';
+                uploadArea.style.background = 'var(--bg)';
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.style.borderColor = '';
+                uploadArea.style.background = '';
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.style.borderColor = '';
+                uploadArea.style.background = '';
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+        }
+
+        async function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    // Process and send to backend
+                    const processedData = processExcelData(jsonData);
+                    
+                    const response = await fetch(`${API_BASE}/import-excel`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken
+                        },
+                        body: JSON.stringify({ members: processedData })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert(`✅ Imported ${result.imported} members successfully!${result.errors.length > 0 ? '\n\nErrors:\n' + result.errors.join('\n') : ''}`);
+                        loadAdminData();
+                    }
+                } catch (error) {
+                    alert('❌ Error: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processExcelData(data) {
+            return data.map((row, index) => {
+                // Extract name (full name in one column)
+                const fullName = row['Name & Surname'] || row['Name and Surname'] || '';
+                const nameParts = fullName.trim().split(' ');
+                const firstName = nameParts[0] || '';
+                const surname = nameParts.slice(1).join(' ') || '';
+                
+                // Generate member number from timestamp or index
+                const timestamp = row['Timestamp'] ? new Date(row['Timestamp']).getTime() : Date.now();
+                const memberNumber = `M${String(1000 + index).padStart(4, '0')}`;
+                
+                // Get membership type and determine expiry (1 year from now)
+                const membershipType = row['Membership Type'] || 'Solo';
+                const expiryDate = new Date();
+                expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+                const expiryDateString = expiryDate.toISOString().split('T')[0];
+                
+                // Get contact info
+                const email = (row['Email Adress'] || row['Email Address'] || '').toLowerCase().trim();
+                const phone = row['Contact Number'] || '';
+                
+                // Get photo URL
+                const photoUrl = row['Upload profile picture'] || '';
+                
+                // Check if admin (you can manually mark some emails as admin)
+                // For now, we'll check if email contains 'admin' or matches specific emails
+                const isAdmin = email.includes('admin') ? 'Yes' : 'No';
+                
+                // Parse family members from spouse details
+                const familyMembers = [];
+                if (membershipType.toLowerCase().includes('family')) {
+                    // Spouse details are in one field, separated by newlines
+                    const spouseDetails = row['If family Package - Details of spouse\nName and surname '] || '';
+                    if (spouseDetails && spouseDetails.trim()) {
+                        const lines = spouseDetails.split('\n').filter(l => l.trim());
+                        if (lines.length >= 1) {
+                            const spouseName = lines[0].trim();
+                            const spouseId = lines[1] || '';
+                            const spousePhone = lines[2] || '';
+                            const spouseEmail = lines[3] || '';
+                            
+                            if (spouseName) {
+                                familyMembers.push({
+                                    name: spouseName,
+                                    member_number: `${memberNumber}-S1`,
+                                    relationship: 'Spouse'
+                                });
+                            }
+                        }
+                    }
+                }
+
+                return {
+                    member_number: memberNumber,
+                    first_name: firstName,
+                    surname: surname,
+                    email: email,
+                    phone: phone,
+                    membership_type: membershipType,
+                    expiry_date: expiryDateString,
+                    status: 'active',
+                    photo_url: photoUrl,
+                    is_admin: isAdmin,
+                    family_members: familyMembers
+                };
+            });
+        }
+    </script>
+</body>
+</html>
