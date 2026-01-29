@@ -995,75 +995,6 @@
             transform: scale(0.98);
         }
 
-        /* Admin Creation Form - Mobile Fix */
-        /* Enhanced Admin Create Form - Mobile First */
-        .admin-create-form {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: var(--spacing-md);
-            margin-top: var(--spacing-lg);
-        }
-
-        .admin-create-form .form-group {
-            margin-bottom: 0; /* Override default form-group margin */
-        }
-
-        .admin-create-form .form-group:last-child {
-            grid-column: 1 / -1;
-            margin-top: var(--spacing-md);
-        }
-
-        .admin-create-form .btn {
-            min-height: 48px; /* Better touch target */
-            font-weight: 600;
-            font-size: 1rem;
-        }
-
-        /* Tablet and up - two columns */
-        @media (min-width: 640px) {
-            .admin-create-form {
-                grid-template-columns: repeat(2, 1fr);
-                gap: var(--spacing-lg);
-            }
-            
-            /* Make certain fields span full width if needed */
-            .admin-create-form .form-group.full-width {
-                grid-column: 1 / -1;
-            }
-        }
-
-        /* Mobile-specific adjustments */
-        @media (max-width: 480px) {
-            .admin-create-form {
-                gap: var(--spacing-sm);
-            }
-            
-            .admin-create-form .form-group input {
-                padding: 0.75rem var(--spacing-md);
-                font-size: 16px; /* Prevents iOS zoom */
-            }
-            
-            .admin-create-form .btn {
-                padding: var(--spacing-md);
-            }
-        }
-
-        /* Better label visibility on mobile */
-        .admin-create-form .form-group label {
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: var(--spacing-xs);
-            display: block;
-            color: var(--text);
-        }
-
-        /* Focus states for better UX */
-        .admin-create-form .form-group input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
-            outline: none;
-        }
-
         @media (max-width: 640px) {
             .family-cards {
                 grid-template-columns: 1fr;
@@ -1259,7 +1190,7 @@
                 <h3 style="margin-bottom: 1rem;">Create New Admin Account</h3>
                 <div id="createAdminError" class="alert error" style="display: none;"></div>
                 <div id="createAdminSuccess" class="alert success" style="display: none;"></div>
-                <form onsubmit="handleCreateAdmin(event)" class="admin-create-form">
+                <form onsubmit="handleCreateAdmin(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label for="adminMemberNumber">Member Number</label>
                         <input type="text" id="adminMemberNumber" placeholder="M0001" required>
