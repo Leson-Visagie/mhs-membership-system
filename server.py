@@ -514,6 +514,196 @@ def verify():
         conn.close()
         return jsonify({'error': 'Verification failed'}), 500
 
+@app.route('/api/member/profile', methods=['GET'])
+def get_member_profile():
+    """Get member profile and attendance"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('SELECT * FROM members WHERE email = ?', (user['email'],))
+        member = cursor.fetchone()
+        
+        if not member:
+            return jsonify({'error': 'Member not found'}), 404
+        
+        cursor.execute('''
+            SELECT * FROM family_members 
+            WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
+        ''', (user['email'],))
+        family_members = [dict(row) for row in cursor.fetchall()]
+        
+        cursor.execute('''
+            SELECT * FROM attendance 
+            WHERE member_number = ? OR member_number IN (
+                SELECT member_number FROM family_members 
+                WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
+            )
+            ORDER BY timestamp DESC
+            LIMIT 50
+        ''', (member['member_number'], user['email']))
+        attendance = [dict(row) for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        return jsonify({
+            'member': dict(member),
+            'family_members': family_members,
+            'attendance': attendance
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': 'Failed to fetch profile'}), 500
+
+@app.route('/api/scan', methods=['POST'])
+def scan():
+    """Handle QR code scanning (Admin only)"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    data = request.json
+    scanned_member_number = data.get('member_number')
+    event_name = data.get('event_name', 'General Access')
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT m.*, m.first_name || ' ' || m.surname as full_name
+            FROM members m
+            WHERE m.member_number = ?
+        ''', (scanned_member_number,))
+        
+        member = cursor.fetchone()
+        
+        if not member:
+            cursor.execute('''
+                SELECT m.*, fm.name as full_name, fm.member_number as scanned_number
+                FROM family_members fm
+                JOIN members m ON fm.primary_member_id = m.id
+                WHERE fm.member_number = ?
+            ''', (scanned_member_number,))
+            
+            family_result = cursor.fetchone()
+            if family_result:
+                member = family_result
+                member_name = family_result['full_name']
+            else:
+                conn.close()
+                return jsonify({
+                    'success': False,
+                    'status': 'error',
+                    'message': 'Member not found'
+                }), 404
+        else:
+            member_name = member['full_name']
+        
+        is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
+        points_awarded = 10 if is_active else 0
+        
+        cursor.execute('''
+            INSERT INTO attendance 
+            (member_number, member_name, event_name, scanned_by, timestamp, points_awarded, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            scanned_member_number,
+            member_name,
+            event_name,
+            user['email'],
+            datetime.now().isoformat(),
+            points_awarded,
+            'granted' if is_active else 'denied'
+        ))
+        
+        if is_active:
+            cursor.execute('''
+                UPDATE members 
+                SET points = points + ? 
+                WHERE member_number = ? OR id = (
+                    SELECT primary_member_id FROM family_members WHERE member_number = ?
+                )
+            ''', (points_awarded, scanned_member_number, scanned_member_number))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'status': 'granted' if is_active else 'denied',
+            'member_name': member_name,
+            'points_awarded': points_awarded,
+            'message': 'Access Granted' if is_active else 'Membership Expired'
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': 'Scan failed'}), 500
+
+@app.route('/api/member-info/<member_number>', methods=['GET'])
+def get_member_info(member_number):
+    """Get member info for confirmation display"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check regular members
+        cursor.execute('''
+            SELECT m.*, m.first_name || " " || m.surname as member_name
+            FROM members m
+            WHERE m.member_number = ?
+        ''', (member_number,))
+        
+        member = cursor.fetchone()
+        
+        if not member:
+            # Check family members
+            cursor.execute('''
+                SELECT m.*, fm.name as member_name, fm.member_number as scanned_number
+                FROM family_members fm
+                JOIN members m ON fm.primary_member_id = m.id
+                WHERE fm.member_number = ?
+            ''', (member_number,))
+            member = cursor.fetchone()
+        
+        if member:
+            is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
+            
+            return jsonify({
+                'found': True,
+                'member_number': member_number,
+                'member_name': member['member_name'],
+                'is_active': is_active,
+                'expiry_date': member['expiry_date'],
+                'status': member['status'],
+                'membership_type': member['membership_type']
+            })
+        else:
+            return jsonify({
+                'found': False,
+                'member_number': member_number,
+                'message': 'Member not found'
+            })
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 @app.route('/api/scan-qr', methods=['POST'])
 def scan_qr():
     """Scan QR code and record attendance (Admin only)"""
