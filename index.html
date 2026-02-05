@@ -1280,46 +1280,7 @@ body::after {
             }
         }
 
-        async function loadUserData() {
-            try {
-                const response = await fetch(`${API_BASE}/member/profile`, {
-                    headers: { 'Authorization': authToken }
-                });
-                
-                if (!response.ok) {
-                    logout();
-                    return;
-                }
-                
-                const data = await response.json();
-                currentUser = { ...data.member, role: data.member.is_admin ? 'admin' : 'member' };
-                
-                // Update UI
-                document.getElementById('loginView').classList.remove('active');
-                document.getElementById('mainNav').style.display = 'flex';
-                document.getElementById('userGreeting').textContent = `Hello, ${currentUser.first_name}!`;
-                
-                // Show appropriate buttons based on role
-                if (currentUser.role === 'admin') {
-                    document.getElementById('navAdmin').style.display = 'block';
-                    document.getElementById('navScanner').style.display = 'block';
-                }
-                
-                // Load member card
-                displayMemberCard(data.member, data.family_members);
-                displayAttendance(data.attendance);
-                
-                showView('member');
-                
-                // Load admin data if admin
-                if (currentUser.role === 'admin') {
-                    loadAdminData();
-                }
-            } catch (error) {
-                console.error('Error loading user data:', error);
-                logout();
-            }
-        }
+     
 
 
         // Photo Upload Functions
