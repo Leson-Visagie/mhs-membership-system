@@ -1084,6 +1084,7 @@ body::after {
                             <th>Role</th>
                             <th>Points</th>
                             <th>Attendance</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="adminMembersTable"></tbody>
@@ -1921,6 +1922,13 @@ body::after {
                         <td><span class="badge ${m.is_admin ? 'admin' : 'member'}">${m.is_admin ? 'Admin' : 'Member'}</span></td>
                         <td>${m.points}</td>
                         <td>${m.attendance_count || 0}</td>
+                        <td>
+                            <button onclick="deleteMember('${m.member_number}', '${m.first_name} ${m.surname}')" 
+                                    style="background: var(--danger); color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
+                                    title="Delete member">
+                                🗑️ Delete
+                            </button>
+                        </td>
                     </tr>
                 `).join('');
 
@@ -1955,6 +1963,40 @@ body::after {
                 const text = row.textContent.toLowerCase();
                 row.style.display = text.includes(searchTerm) ? '' : 'none';
             });
+        }
+
+        async function deleteMember(memberNumber, memberName) {
+            // Confirm deletion
+            if (!confirm(`⚠️ Are you sure you want to delete ${memberName} (${memberNumber})?\n\nThis will permanently remove:\n- Member profile\n- All attendance records\n- All family members\n- All points\n\nThis action CANNOT be undone!`)) {
+                return;
+            }
+
+            // Double confirmation for safety
+            if (!confirm(`🚨 FINAL CONFIRMATION\n\nDelete ${memberName}?\n\nClick OK to permanently delete.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/delete-member/${memberNumber}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': authToken
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(`✅ ${memberName} has been deleted successfully.`);
+                    // Reload the admin data to refresh the table
+                    await loadAdminData();
+                } else {
+                    alert(`❌ Failed to delete member: ${result.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert('❌ Failed to delete member: ' + error.message);
+            }
         }
 
         async function showExpiringMembers() {
@@ -2089,10 +2131,10 @@ body::after {
         const timestamp = row['Timestamp'] ? new Date(row['Timestamp']).getTime() : Date.now();
         const memberNumber = `M${String(1000 + index).padStart(4, '0')}`;
         
-        // Get membership type and determine expiry (1 year from now)
+        // Get membership type and determine expiry (11 months from now)
         const membershipType = row['Membership Type'] || 'Solo';
         const expiryDate = new Date();
-        expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+        expiryDate.setMonth(expiryDate.getMonth() + 11);
         const expiryDateString = expiryDate.toISOString().split('T')[0];
         
         // Get contact info

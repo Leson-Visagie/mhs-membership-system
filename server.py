@@ -1031,6 +1031,67 @@ def create_admin():
         conn.close()
         return jsonify({'error': f'Failed to create admin: {str(e)}'}), 500
 
+@app.route('/api/admin/delete-member/<member_number>', methods=['DELETE'])
+def delete_member(member_number):
+    """Delete a member and all associated data (Admin only)"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # First, check if member exists
+        cursor.execute('SELECT id, first_name, surname, email FROM members WHERE member_number = ?', (member_number,))
+        member = cursor.fetchone()
+        
+        if not member:
+            conn.close()
+            return jsonify({'error': 'Member not found'}), 404
+        
+        member_id = member[0]
+        member_name = f"{member[1]} {member[2]}"
+        member_email = member[3]
+        
+        # Prevent deleting yourself
+        if member_email == user['email']:
+            conn.close()
+            return jsonify({'error': 'Cannot delete your own account'}), 400
+        
+        # Delete family members
+        cursor.execute('DELETE FROM family_members WHERE primary_member_id = ?', (member_id,))
+        
+        # Delete attendance records
+        cursor.execute('DELETE FROM attendance WHERE member_number = ?', (member_number,))
+        cursor.execute('''
+            DELETE FROM attendance WHERE member_number IN (
+                SELECT member_number FROM family_members WHERE primary_member_id = ?
+            )
+        ''', (member_id,))
+        
+        # Delete sessions
+        cursor.execute('DELETE FROM sessions WHERE email = ?', (member_email,))
+        
+        # Delete the member
+        cursor.execute('DELETE FROM members WHERE member_number = ?', (member_number,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Member {member_name} ({member_number}) has been deleted',
+            'deleted_member': member_number
+        })
+        
+    except Exception as e:
+        conn.close()
+        print(f"Delete member error: {e}")
+        return jsonify({'error': f'Failed to delete member: {str(e)}'}), 500
+
 @app.route('/api/member/change-password', methods=['POST'])
 def change_password():
     """Change member password"""
