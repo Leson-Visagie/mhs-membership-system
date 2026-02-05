@@ -102,31 +102,6 @@ def init_db():
     """Initialize database with required tables"""
     conn = get_db()
     cursor = conn.cursor()
-
-def convert_google_drive_link(drive_url):
-    """Convert Google Drive link to public view URL"""
-    if not drive_url or drive_url == 'nan':
-        return None
-    
-    patterns = [
-        r'[?&]id=([a-zA-Z0-9_-]+)',  # /open?id=FILE_ID
-        r'/file/d/([a-zA-Z0-9_-]+)',  # /file/d/FILE_ID
-        r'/d/([a-zA-Z0-9_-]+)/'       # /d/FILE_ID/
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, drive_url)
-        if match:
-            file_id = match.group(1)
-            # Test different public URL formats
-            urls_to_try = [
-                f'https://drive.google.com/uc?export=view&id={file_id}',
-                f'https://lh3.googleusercontent.com/d/{file_id}',  # Alternative
-                f'https://docs.google.com/uc?id={file_id}'         # Another format
-            ]
-            return urls_to_try[0]  # Try first format
-    
-    return drive_url  # Return as-is if not Google Drive
     
     # Members table
     cursor.execute('''
@@ -213,7 +188,8 @@ def convert_google_drive_link(drive_url):
                 'Solo',
                 '2030-12-31',
                 'active',
-                'https://ui-avatars.com/api/?name=Leson+Visagie&background=059669&color=fff'
+                'https://ui-avatars.com/api/?name=Leson+Visagie&background=059669&color=fff',
+                1
             ))
             print("✅ Default admin created!")
             print(f"   Username: {default_admin_email}")
@@ -224,6 +200,7 @@ def convert_google_drive_link(drive_url):
     
     conn.commit()
     conn.close()
+    print("✅ Database initialized successfully")
 
 def hash_password(password):
     """Hash password using SHA256"""
@@ -383,37 +360,6 @@ def index():
 def health():
     """Health check endpoint for monitoring"""
     return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
-
-def convert_google_drive_link(drive_url):
-    """Convert Google Drive link to direct image URL"""
-    if not drive_url or not isinstance(drive_url, str):
-        return None
-    
-    if drive_url.lower() == 'nan' or not drive_url.strip():
-        return None
-    
-    if 'drive.google.com' in drive_url:
-        # Format 1: /open?id=FILE_ID
-        match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', drive_url)
-        if match:
-            file_id = match.group(1)
-            return f'https://drive.google.com/uc?export=view&id={file_id}'
-        
-        # Format 2: /file/d/FILE_ID/view
-        match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', drive_url)
-        if match:
-            file_id = match.group(1)
-            return f'https://drive.google.com/uc?export=view&id={file_id}'
-        
-        # Format 3: Already in direct format
-        if 'uc?export=view&id=' in drive_url:
-            return drive_url
-    
-    return drive_url
-
-def generate_fallback_avatar(first_name, surname):
-    """Generate UI Avatars fallback image URL"""
-    return f'https://ui-avatars.com/api/?name={first_name}+{surname}&background=1a472a&color=FFC107&size=200&bold=true'
 
 @app.route('/api/import-excel', methods=['POST'])
 def import_excel():
