@@ -6,6 +6,7 @@ Configured for production deployment
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 import sqlite3
 import hashlib
 import secrets
@@ -24,6 +25,7 @@ DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.config['SECRET_KEY'] = SECRET_KEY
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
 CORS(app)
 
 def ensure_data_directory():
@@ -299,8 +301,10 @@ def upload_photo():
         
         print(f"Uploading file: {file.filename}, size: {file.content_length} bytes")
         
-        # Generate unique filename
-        filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.jpg"
+        # Generate unique filename with security
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.{ext}"
+        filename = secure_filename(filename)
         upload_folder = 'static/uploads/profiles'
         
         # Ensure upload directory exists
@@ -538,6 +542,15 @@ def debug_schema():
         print(f"Schema debug error: {str(e)}")
         conn.close()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/uploads/<path:filename>')
+def serve_upload(filename):
+    """Serve uploaded profile photos"""
+    try:
+        return send_from_directory('static/uploads', filename)
+    except Exception as e:
+        print(f"Upload serving error for {filename}: {e}")
+        return jsonify({'error': 'File not found'}), 404
 
 @app.route('/')
 def index():
