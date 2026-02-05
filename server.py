@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 # Configuration
 SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-DATABASE_PATH = os.getenv('DATABASE_PATH', '/data/membership.db')
+DATABASE_PATH = None
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 app = Flask(__name__, static_folder='static', static_url_path='')
@@ -43,7 +43,7 @@ def ensure_data_directory():
 
 def get_db():
     """Get database connection"""
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
