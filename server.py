@@ -14,12 +14,32 @@ from datetime import datetime, timedelta
 
 # Configuration
 SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-DATABASE = os.environ.get('DATABASE_PATH', 'membership.db')
+DATABASE_PATH = os.getenv('DATABASE_PATH', '/data/membership.db')
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.config['SECRET_KEY'] = SECRET_KEY
 CORS(app)
+
+def ensure_data_directory():
+    """Ensure /data directory exists and is writable"""
+    data_dir = os.path.dirname(DATABASE_PATH)
+    if not os.path.exists(data_dir):
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            print(f"✅ Created data directory: {data_dir}")
+        except Exception as e:
+            print(f"⚠️  Could not create data directory: {e}")
+            # Fall back to local directory
+            global DATABASE_PATH
+            DATABASE_PATH = './membership.db'
+            print(f"   Using fallback: {DATABASE_PATH}")
+    
+    # Check if writable
+    if os.path.exists(data_dir) and not os.access(data_dir, os.W_OK):
+        print(f"⚠️  Data directory not writable: {data_dir}")
+        DATABASE_PATH = './membership.db'
+        print(f"   Using fallback: {DATABASE_PATH}")
 
 def get_db():
     """Get database connection"""
@@ -787,6 +807,8 @@ def not_found(e):
 def server_error(e):
     """Handle 500 errors"""
     return jsonify({'error': 'Internal server error'}), 500
+
+ensure_data_directory()
 
 if __name__ == '__main__':
     init_db()
