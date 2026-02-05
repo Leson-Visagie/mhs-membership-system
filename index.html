@@ -1892,7 +1892,7 @@ body::after {
             });
         }
 
-        async function handleFile(file) {
+function handleFile(file) {
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
@@ -1905,26 +1905,25 @@ body::after {
             const jsonData = XLSX.utils.sheet_to_json(firstSheet);
             console.log("Excel data:", jsonData);
             
-            // Process and send to backend
-            const processedData = processExcelData(jsonData);
-            console.log("Processed data:", processedData);
+            // Process and send to backend with profile pictures
+            const processedData = processExcelDataWithPhotos(jsonData);
+            console.log("Processed data with photos:", processedData);
             
-            const formData = new FormData();
-                formData.append('file', file);
-
-                const response = await fetch(`${API_BASE}/admin/import-excel`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': authToken
-                    },
-                    body: formData
-                });
+            // Use the existing endpoint (no need for new one)
+            const response = await fetch(`${API_BASE}/import-excel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': authToken
+                },
+                body: JSON.stringify({ members: processedData })
+            });
             
             const result = await response.json();
             console.log("Server response:", result);
             
             if (result.success) {
-                alert(`✅ Imported ${result.imported} members successfully!${result.errors.length > 0 ? '\n\nErrors:\n' + result.errors.join('\n') : ''}`);
+                alert(`✅ Imported ${result.imported} members successfully!${result.errors && result.errors.length > 0 ? '\n\nErrors:\n' + result.errors.join('\n') : ''}`);
                 loadAdminData();
             } else {
                 alert('❌ Import failed: ' + (result.error || 'Unknown error'));
@@ -1937,6 +1936,89 @@ body::after {
     reader.readAsArrayBuffer(file);
 }
 
+function processExcelDataWithPhotos(data) {
+    return data.map((row, index) => {
+        // Extract name (full name in one column)
+        const fullName = row['Name & Surname'] || '';
+        const nameParts = fullName.trim().split(' ');
+        const firstName = nameParts[0] || '';
+        const surname = nameParts.slice(1).join(' ') || '';
+        
+        // Generate member number from timestamp or index
+        const memberNumber = `M${String(1000 + index).padStart(4, '0')}`;
+        
+        // Get membership type - clean up the text
+        let membershipTypeRaw = row['Membership Type'] || 'Solo';
+        let membershipType = 'Solo';
+        let isFamily = false;
+        
+        if (membershipTypeRaw.includes('Family Package') || membershipTypeRaw.includes('Family')) {
+            membershipType = 'Family Package';
+            isFamily = true;
+        } else if (membershipTypeRaw.includes('Annual Membership') || membershipTypeRaw.includes('Solo')) {
+            membershipType = 'Solo';
+        }
+        
+        // Determine expiry (1 year from now)
+        const expiryDate = new Date();
+        expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+        const expiryDateString = expiryDate.toISOString().split('T')[0];
+        
+        // Get contact info
+        const email = (row['Email Adress'] || '').toLowerCase().trim();
+        const phone = row['Contact Number'] || '';
+        
+        // Get photo URL
+        let photoUrl = row['Upload profile picture'] || '';
+
+        // If it's a Google Drive link, keep it as-is (server will convert)
+        // If no photo, we'll use the helper function on the server side
+
+        // Check if admin - for now, set to No for imported members
+        const isAdmin = 'No';
+        
+        // Parse family members from spouse details
+        const familyMembers = [];
+        if (isFamily) {
+            // Spouse details are in one field, separated by newlines
+            const spouseDetails = row['If family Package - Details of spouse\nName and surname '] || '';
+            if (spouseDetails && spouseDetails.trim()) {
+                const lines = spouseDetails.split('\n').filter(l => l.trim());
+                if (lines.length >= 1) {
+                    const spouseName = lines[0].trim();
+                    const spouseId = lines[1] || '';
+                    const spousePhone = lines[2] || '';
+                    const spouseEmail = lines[3] || '';
+                    
+                    if (spouseName) {
+                        familyMembers.push({
+                            name: spouseName,
+                            member_number: `${memberNumber}-S1`,
+                            relationship: 'Spouse'
+                        });
+                    }
+                }
+            }
+        }
+
+        // Create member object
+        const member = {
+            member_number: memberNumber,
+            first_name: firstName,
+            surname: surname,
+            email: email,
+            phone: phone,
+            membership_type: membershipType,
+            expiry_date: expiryDateString,
+            status: 'active',
+            photo_url: photoUrl || '', // Send empty string if no photo
+            is_admin: isAdmin,
+            family_members: familyMembers
+        };
+
+        return member;
+    });
+}
 function processExcelData(data) {
     return data.map((row, index) => {
         // Extract name (full name in one column)
