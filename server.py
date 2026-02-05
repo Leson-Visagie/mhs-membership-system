@@ -266,84 +266,38 @@ def server_error(e):
 
 @app.route('/api/upload-photo', methods=['POST'])
 def upload_photo():
-    """Upload profile photo"""
+    """Upload profile photo - handles both file uploads and base64"""
     token = request.headers.get('Authorization')
     user = verify_token(token)
     
     if not user:
         return jsonify({'error': 'Unauthorized'}), 401
     
-    # Check if file was uploaded
-    if 'photo' not in request.files:
-        # Check for base64 data
-        data = request.json
-        if data and 'photo_data' in data:
-            return handle_base64_upload(data['photo_data'], user)
-        return jsonify({'error': 'No photo provided'}), 400
+    print(f"Upload photo request from: {user['email']}")
     
-    file = request.files['photo']
+    # Check content type
+    content_type = request.headers.get('Content-Type', '')
+    print(f"Content-Type: {content_type}")
     
-    # Validate file
-    if not file.filename:
-        return jsonify({'error': 'No file selected'}), 400
-    
-    # Check file extension
-    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
-    if not '.' in file.filename or \
-       file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
-        return jsonify({'error': 'Invalid file type. Use PNG, JPG, or GIF'}), 400
-    
-    # Generate unique filename
-    filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.jpg"
-    upload_folder = 'static/uploads/profiles'
-    
-    # Ensure upload directory exists
-    if not os.path.exists(upload_folder):
-        os.makedirs(upload_folder, exist_ok=True)
-    
-    filepath = os.path.join(upload_folder, filename)
-    
-    try:
-        # Save the file
-        file.save(filepath)
+    # Handle multipart/form-data (file upload)
+    if 'multipart/form-data' in content_type:
+        if 'photo' not in request.files:
+            print("No photo file in request.files")
+            return jsonify({'error': 'No photo file uploaded'}), 400
         
-        # Update database with relative URL
-        photo_url = f'/static/uploads/profiles/{filename}'
+        file = request.files['photo']
         
-        conn = get_db()
-        cursor = conn.cursor()
+        # Validate file
+        if not file.filename:
+            return jsonify({'error': 'No file selected'}), 400
         
-        cursor.execute('''
-            UPDATE members 
-            SET photo_url = ? 
-            WHERE email = ?
-        ''', (photo_url, user['email']))
+        # Check file extension
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+        if not '.' in file.filename or \
+           file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+            return jsonify({'error': 'Invalid file type. Use PNG, JPG, or GIF'}), 400
         
-        conn.commit()
-        conn.close()
-        
-        # Return full URL for frontend
-        full_url = f"{request.host_url.rstrip('/')}{photo_url}"
-        
-        return jsonify({
-            'success': True,
-            'photo_url': full_url,
-            'message': 'Photo uploaded successfully'
-        })
-        
-    except Exception as e:
-        print(f"Upload error: {e}")
-        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
-
-def handle_base64_upload(base64_data, user):
-    """Handle base64 encoded image upload"""
-    try:
-        # Remove data URL prefix if present
-        if ',' in base64_data:
-            base64_data = base64_data.split(',')[1]
-        
-        # Decode base64
-        image_data = base64.b64decode(base64_data)
+        print(f"Uploading file: {file.filename}, size: {file.content_length} bytes")
         
         # Generate unique filename
         filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.jpg"
@@ -352,12 +306,120 @@ def handle_base64_upload(base64_data, user):
         # Ensure upload directory exists
         if not os.path.exists(upload_folder):
             os.makedirs(upload_folder, exist_ok=True)
+            print(f"Created upload directory: {upload_folder}")
+        
+        filepath = os.path.join(upload_folder, filename)
+        
+        try:
+            # Save the file
+            file.save(filepath)
+            print(f"File saved to: {filepath}")
+            
+            # Update database with relative URL
+            photo_url = f'/static/uploads/profiles/{filename}'
+            
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                UPDATE members 
+                SET photo_url = ? 
+                WHERE email = ?
+            ''', (photo_url, user['email']))
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"Database updated for {user['email']}")
+            
+            # Return full URL for frontend
+            full_url = f"{request.host_url.rstrip('/')}{photo_url}"
+            
+            return jsonify({
+                'success': True,
+                'photo_url': full_url,
+                'message': 'Photo uploaded successfully'
+            })
+            
+        except Exception as e:
+            print(f"Upload error: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Upload failed: {str(e)}'}), 500
+    
+    # Handle application/json (base64 data)
+    elif 'application/json' in content_type:
+        data = request.json
+        print(f"JSON data received: {data.keys() if data else 'No data'}")
+        
+        if not data or 'photo_data' not in data:
+            return jsonify({'error': 'No photo data provided'}), 400
+        
+        return handle_base64_upload(data['photo_data'], user, request)
+    
+    else:
+        return jsonify({'error': 'Unsupported content type. Use multipart/form-data or application/json'}), 400
+
+def handle_base64_upload(base64_data, user, request):
+    """Handle base64 encoded image upload"""
+    try:
+        print(f"Base64 upload for {user['email']}")
+        print(f"Base64 data length: {len(base64_data) if base64_data else 0}")
+        
+        if not base64_data or base64_data == 'undefined':
+            return jsonify({'error': 'No photo data provided'}), 400
+        
+        # Check if it's a default avatar URL (not base64)
+        if base64_data.startswith('http'):
+            print("Updating to default avatar URL")
+            # It's a URL, just update the database
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                UPDATE members 
+                SET photo_url = ? 
+                WHERE email = ?
+            ''', (base64_data, user['email']))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'photo_url': base64_data,
+                'message': 'Avatar updated'
+            })
+        
+        # Remove data URL prefix if present
+        if ',' in base64_data:
+            base64_data = base64_data.split(',')[1]
+        
+        # Decode base64
+        try:
+            image_data = base64.b64decode(base64_data)
+        except Exception as e:
+            print(f"Base64 decode error: {e}")
+            return jsonify({'error': 'Invalid base64 data'}), 400
+            
+        print(f"Base64 decoded, size: {len(image_data)} bytes")
+        
+        # Generate unique filename
+        filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.jpg"
+        upload_folder = 'static/uploads/profiles'
+        
+        # Ensure upload directory exists
+        if not os.path.exists(upload_folder):
+            os.makedirs(upload_folder, exist_ok=True)
+            print(f"Created upload directory: {upload_folder}")
         
         filepath = os.path.join(upload_folder, filename)
         
         # Save the file
         with open(filepath, 'wb') as f:
             f.write(image_data)
+        
+        print(f"File saved to: {filepath}")
         
         # Update database
         photo_url = f'/static/uploads/profiles/{filename}'
@@ -374,15 +436,20 @@ def handle_base64_upload(base64_data, user):
         conn.commit()
         conn.close()
         
+        print(f"Database updated for {user['email']}")
+        
         full_url = f"{request.host_url.rstrip('/')}{photo_url}"
         
         return jsonify({
             'success': True,
-            'photo_url': full_url
+            'photo_url': full_url,
+            'message': 'Photo uploaded successfully'
         })
         
     except Exception as e:
         print(f"Base64 upload error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 @app.route('/api/test-image/<path:url>')
