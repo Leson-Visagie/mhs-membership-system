@@ -11,6 +11,8 @@ import hashlib
 import secrets
 import os
 import re 
+import base64
+import uuid
 import requests
 from datetime import datetime, timedelta
 
@@ -262,7 +264,126 @@ def server_error(e):
     print(f"Server error: {str(e)}")
     return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/api/upload-photo', methods=['POST'])
+def upload_photo():
+    """Upload profile photo"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    # Check if file was uploaded
+    if 'photo' not in request.files:
+        # Check for base64 data
+        data = request.json
+        if data and 'photo_data' in data:
+            return handle_base64_upload(data['photo_data'], user)
+        return jsonify({'error': 'No photo provided'}), 400
+    
+    file = request.files['photo']
+    
+    # Validate file
+    if not file.filename:
+        return jsonify({'error': 'No file selected'}), 400
+    
+    # Check file extension
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+    if not '.' in file.filename or \
+       file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+        return jsonify({'error': 'Invalid file type. Use PNG, JPG, or GIF'}), 400
+    
+    # Generate unique filename
+    filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.jpg"
+    upload_folder = 'static/uploads/profiles'
+    
+    # Ensure upload directory exists
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder, exist_ok=True)
+    
+    filepath = os.path.join(upload_folder, filename)
+    
+    try:
+        # Save the file
+        file.save(filepath)
+        
+        # Update database with relative URL
+        photo_url = f'/static/uploads/profiles/{filename}'
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE members 
+            SET photo_url = ? 
+            WHERE email = ?
+        ''', (photo_url, user['email']))
+        
+        conn.commit()
+        conn.close()
+        
+        # Return full URL for frontend
+        full_url = f"{request.host_url.rstrip('/')}{photo_url}"
+        
+        return jsonify({
+            'success': True,
+            'photo_url': full_url,
+            'message': 'Photo uploaded successfully'
+        })
+        
+    except Exception as e:
+        print(f"Upload error: {e}")
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
+def handle_base64_upload(base64_data, user):
+    """Handle base64 encoded image upload"""
+    try:
+        # Remove data URL prefix if present
+        if ',' in base64_data:
+            base64_data = base64_data.split(',')[1]
+        
+        # Decode base64
+        image_data = base64.b64decode(base64_data)
+        
+        # Generate unique filename
+        filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.jpg"
+        upload_folder = 'static/uploads/profiles'
+        
+        # Ensure upload directory exists
+        if not os.path.exists(upload_folder):
+            os.makedirs(upload_folder, exist_ok=True)
+        
+        filepath = os.path.join(upload_folder, filename)
+        
+        # Save the file
+        with open(filepath, 'wb') as f:
+            f.write(image_data)
+        
+        # Update database
+        photo_url = f'/static/uploads/profiles/{filename}'
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE members 
+            SET photo_url = ? 
+            WHERE email = ?
+        ''', (photo_url, user['email']))
+        
+        conn.commit()
+        conn.close()
+        
+        full_url = f"{request.host_url.rstrip('/')}{photo_url}"
+        
+        return jsonify({
+            'success': True,
+            'photo_url': full_url
+        })
+        
+    except Exception as e:
+        print(f"Base64 upload error: {e}")
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 @app.route('/api/test-image/<path:url>')
 def test_image(url):
