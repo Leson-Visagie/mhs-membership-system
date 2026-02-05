@@ -206,6 +206,32 @@ def init_db():
     conn.close()
     print("✅ Database initialized successfully")
 
+def migrate_photo_urls():
+    """Fix photo URLs that have /static/ prefix (migration)"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Find and fix broken /static/uploads/ URLs
+        cursor.execute("SELECT id, email, photo_url FROM members WHERE photo_url LIKE '%/static/uploads%'")
+        broken = cursor.fetchall()
+        
+        if broken:
+            print(f"⚠️  Found {len(broken)} members with broken photo URLs, fixing...")
+            for row in broken:
+                member_id, email, old_url = row
+                # Replace /static/uploads with /uploads
+                new_url = old_url.replace('/static/uploads', '/uploads')
+                cursor.execute("UPDATE members SET photo_url = ? WHERE id = ?", (new_url, member_id))
+                print(f"   Fixed: {email}")
+            
+            conn.commit()
+            print("✅ Photo URLs migrated successfully")
+        
+        conn.close()
+    except Exception as e:
+        print(f"⚠️  Migration error: {e}")
+
 def hash_password(password):
     """Hash password using SHA256"""
     return hashlib.sha256(password.encode()).hexdigest()
@@ -1239,6 +1265,7 @@ ensure_data_directory()
 
 if __name__ == '__main__':
     init_db()
+    migrate_photo_urls()
     print("\n" + "="*60)
     print("🎓 School Membership System Server")
     print("="*60)
@@ -1253,3 +1280,4 @@ else:
     # This runs when imported by gunicorn on Render
     print("📦 Running in production mode - initializing database...")
     init_db()
+    migrate_photo_urls()
