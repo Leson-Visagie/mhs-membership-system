@@ -259,6 +259,33 @@ def server_error(e):
     print(f"Server error: {str(e)}")
     return jsonify({'error': 'Internal server error'}), 500
 
+
+@app.route('/api/debug/member-photos', methods=['GET'])
+def debug_member_photos():
+    """Debug endpoint to see photo URLs in database"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT member_number, first_name, surname, photo_url FROM members WHERE email = ?', (user['email'],))
+    member = cursor.fetchone()
+    
+    cursor.execute('SELECT member_number, name, photo_url FROM family_members WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)', (user['email'],))
+    family = cursor.fetchall()
+    
+    conn.close()
+    
+    return jsonify({
+        'member': dict(member) if member else None,
+        'family': [dict(row) for row in family]
+    })
+
+
 @app.route('/')
 def index():
     """Serve the main HTML file"""
