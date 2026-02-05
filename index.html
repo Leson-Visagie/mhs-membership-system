@@ -1524,7 +1524,36 @@ body::after {
             document.getElementById('stopScanBtn').style.display = 'none';
         }
 
+        function validateImageUrl(url) {
+    if (!url || url === 'nan') return null;
+    
+    // Test if it's a Google Drive link
+    if (url.includes('drive.google.com')) {
+        // Extract file ID
+        let fileId = null;
         
+        // Try different patterns
+        const idPatterns = [
+            /[?&]id=([a-zA-Z0-9_-]+)/,
+            /\/file\/d\/([a-zA-Z0-9_-]+)/,
+            /\/d\/([a-zA-Z0-9_-]+)\//
+        ];
+        
+        for (const pattern of idPatterns) {
+            const match = url.match(pattern);
+            if (match) {
+                fileId = match[1];
+                break;
+            }
+        }
+        
+        if (fileId) {
+            return `https://drive.google.com/uc?export=view&id=${fileId}`;
+        }
+    }
+    
+    return url;
+}
 
         function handleQRDetection(qrData) {
             try {
