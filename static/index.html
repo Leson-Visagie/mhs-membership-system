@@ -845,7 +845,7 @@ body::after {
 
 /* Navigation brand in gold */
 .nav-brand {
-    color: #1a472a ;
+    color: #FFC107;
     text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
@@ -1027,7 +1027,7 @@ body::after {
                 <h3 style="margin-bottom: 1rem;">Create New Admin Account</h3>
                 <div id="createAdminError" class="alert error" style="display: none;"></div>
                 <div id="createAdminSuccess" class="alert success" style="display: none;"></div>
-                <form onsubmit="handleCreateAdmin(event)" style="display: grid; gap: 1rem;">
+                <form onsubmit="handleCreateAdmin(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label for="adminMemberNumber">Member Number</label>
                         <input type="text" id="adminMemberNumber" placeholder="M0001" required>
@@ -1323,17 +1323,33 @@ body::after {
             }
         }
 
-        function logout() {
+        async function logout() {
+            // Stop scanner if running
+            if (typeof stopScanner === 'function') {
+                stopScanner();
+            }
 
-            stopScanner();
+            // Call server logout API
+            try {
+                await fetch(`${API_BASE}/logout`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authToken }
+                });
+            } catch (error) {
+                console.error('Logout API error:', error);
+            }
 
+            // Clear auth data
             localStorage.removeItem('authToken');
             authToken = null;
             currentUser = null;
             
+            // Hide navigation
             document.getElementById('mainNav').style.display = 'none';
-            document.getElementById('loginView').classList.add('active');
+            
+            // Show only login view, hide all others
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('loginView').classList.add('active');
             
             // Clear login form
             document.getElementById('loginEmail').value = '';
