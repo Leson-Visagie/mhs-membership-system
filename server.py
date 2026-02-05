@@ -11,6 +11,7 @@ import hashlib
 import secrets
 import os
 import re 
+import requests
 from datetime import datetime, timedelta
 
 # Configuration
@@ -101,6 +102,31 @@ def init_db():
     """Initialize database with required tables"""
     conn = get_db()
     cursor = conn.cursor()
+
+def convert_google_drive_link(drive_url):
+    """Convert Google Drive link to public view URL"""
+    if not drive_url or drive_url == 'nan':
+        return None
+    
+    patterns = [
+        r'[?&]id=([a-zA-Z0-9_-]+)',  # /open?id=FILE_ID
+        r'/file/d/([a-zA-Z0-9_-]+)',  # /file/d/FILE_ID
+        r'/d/([a-zA-Z0-9_-]+)/'       # /d/FILE_ID/
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, drive_url)
+        if match:
+            file_id = match.group(1)
+            # Test different public URL formats
+            urls_to_try = [
+                f'https://drive.google.com/uc?export=view&id={file_id}',
+                f'https://lh3.googleusercontent.com/d/{file_id}',  # Alternative
+                f'https://docs.google.com/uc?id={file_id}'         # Another format
+            ]
+            return urls_to_try[0]  # Try first format
+    
+    return drive_url  # Return as-is if not Google Drive
     
     # Members table
     cursor.execute('''
@@ -258,6 +284,42 @@ def server_error(e):
     """Handle 500 errors - always return JSON"""
     print(f"Server error: {str(e)}")
     return jsonify({'error': 'Internal server error'}), 500
+
+
+
+@app.route('/api/test-image/<path:url>')
+def test_image(url):
+    """Test if image URL is accessible"""
+    try:
+        # Decode URL
+        import urllib.parse
+        url = urllib.parse.unquote(url)
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=5)
+        
+        if response.status_code == 200:
+            content_type = response.headers.get('content-type', '')
+            if 'image' in content_type:
+                return jsonify({
+                    'accessible': True,
+                    'content_type': content_type,
+                    'size': len(response.content)
+                })
+        
+        return jsonify({
+            'accessible': False,
+            'status_code': response.status_code,
+            'content_type': response.headers.get('content-type')
+        })
+    except Exception as e:
+        return jsonify({
+            'accessible': False,
+            'error': str(e)
+        })
 
 
 @app.route('/api/debug/member-photos', methods=['GET'])
