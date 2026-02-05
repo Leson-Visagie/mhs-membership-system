@@ -4,22 +4,39 @@ Flask + SQLite Database
 Configured for production deployment
 """
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import sqlite3
 import hashlib
 import secrets
 import os
 from datetime import datetime, timedelta
+from werkzeug.utils import secure_filename
+import uuid
 
 # Configuration
 SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 DATABASE = os.environ.get('DATABASE_PATH', 'membership.db')
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
+# Photo storage configuration
+UPLOAD_FOLDER = '/data/profile_photos'  # Using Render's persistent disk
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.config['SECRET_KEY'] = SECRET_KEY
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 CORS(app)
+
+# Ensure upload directory exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_db():
     """Get database connection"""
@@ -182,6 +199,88 @@ def health():
     """Health check endpoint for monitoring"""
     return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
 
+@app.route('/api/upload-profile-photo', methods=['POST'])
+def upload_profile_photo():
+    """Upload profile photo for logged-in member"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    # Check if file is present
+    if 'photo' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
+    file = request.files['photo']
+    
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
+    
+    try:
+        # Generate unique filename
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.{file_extension}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        
+        # Save file
+        file.save(filepath)
+        
+        # Update database with new photo URL
+        photo_url = f'/api/profile-photo/{unique_filename}'
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Delete old photo if it exists and is not a default avatar
+        cursor.execute('SELECT photo_url FROM members WHERE member_number = ?', (user['member_number'],))
+        result = cursor.fetchone()
+        if result and result[0] and result[0].startswith('/api/profile-photo/'):
+            old_filename = result[0].split('/')[-1]
+            old_filepath = os.path.join(app.config['UPLOAD_FOLDER'], old_filename)
+            if os.path.exists(old_filepath):
+                try:
+                    os.remove(old_filepath)
+                except Exception as e:
+                    print(f"Could not delete old photo: {e}")
+        
+        # Update member's photo_url
+        cursor.execute('''
+            UPDATE members 
+            SET photo_url = ? 
+            WHERE member_number = ?
+        ''', (photo_url, user['member_number']))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'photo_url': photo_url,
+            'message': 'Profile photo uploaded successfully'
+        })
+        
+    except Exception as e:
+        print(f"Photo upload error: {e}")
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
+
+@app.route('/api/profile-photo/<filename>')
+def serve_profile_photo(filename):
+    """Serve uploaded profile photos"""
+    try:
+        # Secure the filename to prevent directory traversal
+        safe_filename = secure_filename(filename)
+        return send_file(
+            os.path.join(app.config['UPLOAD_FOLDER'], safe_filename),
+            mimetype='image/jpeg'
+        )
+    except Exception as e:
+        print(f"Error serving photo: {e}")
+        return jsonify({'error': 'Photo not found'}), 404
+
 @app.route('/api/import-excel', methods=['POST'])
 def import_excel():
     """Import members from Excel file (Admin only)"""
@@ -233,18 +332,27 @@ def import_excel():
             
             member_id = cursor.lastrowid
             
-            if 'family_members' in member_data and member_data['family_members']:
-                for fm in member_data['family_members']:
+            # Handle family members
+            family_members = member_data.get('family_members', [])
+            for fam in family_members:
+                try:
                     cursor.execute('''
                         INSERT OR REPLACE INTO family_members 
                         (primary_member_id, member_number, name, relationship)
                         VALUES (?, ?, ?, ?)
-                    ''', (member_id, fm['member_number'], fm['name'], fm['relationship']))
+                    ''', (
+                        member_id,
+                        fam.get('member_number', ''),
+                        fam.get('name', ''),
+                        fam.get('relationship', 'Family')
+                    ))
+                except Exception as e:
+                    errors.append(f"Family member error for {member_number}: {str(e)}")
             
             imported += 1
             
         except Exception as e:
-            errors.append(f"{member_data.get('member_number', 'Unknown')}: {str(e)}")
+            errors.append(f"Error importing {member_data.get('email', 'unknown')}: {str(e)}")
     
     conn.commit()
     conn.close()
@@ -257,128 +365,158 @@ def import_excel():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    """Login endpoint - email-based authentication"""
+    """Login endpoint"""
     data = request.json
-    
-    # Debug logging
-    print(f"Login attempt with data: {data}")
-    
     email = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
     
     if not email or not password:
-        print("Missing email or password")
         return jsonify({'error': 'Email and password required'}), 400
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        print(f"Looking for user with email: {email}")
-        cursor.execute('SELECT * FROM members WHERE email = ?', (email,))
+        password_hash = hash_password(password)
+        cursor.execute('''
+            SELECT member_number, first_name, surname, email, membership_type, 
+                   expiry_date, status, photo_url, points, is_admin
+            FROM members 
+            WHERE email = ? AND password_hash = ?
+        ''', (email, password_hash))
+        
         member = cursor.fetchone()
         
-        if member:
-            print(f"Found user: {member['email']}")
-            print(f"Stored hash: {member['password_hash']}")
-            print(f"Provided password hash: {hash_password(password)}")
-            
-        if member and member['password_hash'] == hash_password(password):
-            role = 'admin' if member['is_admin'] == 1 else 'member'
-            print(f"Password match! Role: {role}")
-            
-            token = generate_token()
-            expires_at = (datetime.now() + timedelta(days=30)).isoformat()
-            
-            # Clean up old sessions for this user
-            cursor.execute('DELETE FROM sessions WHERE email = ?', (email,))
-            
-            cursor.execute('''
-                INSERT INTO sessions (email, token, role, expires_at)
-                VALUES (?, ?, ?, ?)
-            ''', (email, token, role, expires_at))
-            
-            conn.commit()
-            conn.close()
-            
-            return jsonify({
-                'success': True,
-                'token': token,
-                'role': role,
-                'member': {
-                    'member_number': member['member_number'],
-                    'first_name': member['first_name'],
-                    'surname': member['surname'],
-                    'email': member['email'],
-                    'membership_type': member['membership_type'],
-                    'status': member['status'],
-                    'points': member['points'],
-                    'is_admin': member['is_admin']
-                }
-            })
-        else:
-            print("Invalid credentials")
+        if not member:
             conn.close()
             return jsonify({'error': 'Invalid email or password'}), 401
         
-    except Exception as e:
-        print(f"Login error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        conn.close()
-        return jsonify({'error': f'Login failed: {str(e)}'}), 500
-
+        # Check if membership is active
+        if member['status'] != 'active':
+            conn.close()
+            return jsonify({'error': 'Account is not active'}), 401
         
-@app.route('/api/member/profile', methods=['GET'])
-def get_member_profile():
-    """Get member profile and attendance"""
+        # Generate session token
+        token = generate_token()
+        role = 'admin' if member['is_admin'] == 1 else 'member'
+        expires_at = (datetime.now() + timedelta(days=7)).isoformat()
+        
+        cursor.execute('''
+            INSERT INTO sessions (email, token, role, expires_at)
+            VALUES (?, ?, ?, ?)
+        ''', (email, token, role, expires_at))
+        
+        conn.commit()
+        
+        # Get family members if applicable
+        family_members = []
+        if 'family' in member['membership_type'].lower():
+            cursor.execute('''
+                SELECT member_number, name, relationship
+                FROM family_members
+                WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
+            ''', (email,))
+            family_members = [dict(row) for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'token': token,
+            'role': role,
+            'member': {
+                'member_number': member['member_number'],
+                'first_name': member['first_name'],
+                'surname': member['surname'],
+                'email': member['email'],
+                'membership_type': member['membership_type'],
+                'expiry_date': member['expiry_date'],
+                'status': member['status'],
+                'photo_url': member['photo_url'],
+                'points': member['points'],
+                'family_members': family_members
+            }
+        })
+    except Exception as e:
+        conn.close()
+        print(f"Login error: {e}")
+        return jsonify({'error': 'Login failed'}), 500
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    """Logout endpoint"""
+    token = request.headers.get('Authorization')
+    
+    if token:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM sessions WHERE token = ?', (token,))
+        conn.commit()
+        conn.close()
+    
+    return jsonify({'success': True})
+
+@app.route('/api/verify', methods=['GET'])
+def verify():
+    """Verify session token"""
     token = request.headers.get('Authorization')
     user = verify_token(token)
     
     if not user:
-        return jsonify({'error': 'Unauthorized'}), 401
+        return jsonify({'error': 'Invalid or expired token'}), 401
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        cursor.execute('SELECT * FROM members WHERE email = ?', (user['email'],))
+        cursor.execute('''
+            SELECT member_number, first_name, surname, email, membership_type, 
+                   expiry_date, status, photo_url, points
+            FROM members 
+            WHERE email = ?
+        ''', (user['email'],))
+        
         member = cursor.fetchone()
         
         if not member:
+            conn.close()
             return jsonify({'error': 'Member not found'}), 404
         
-        cursor.execute('''
-            SELECT * FROM family_members 
-            WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
-        ''', (user['email'],))
-        family_members = [dict(row) for row in cursor.fetchall()]
-        
-        cursor.execute('''
-            SELECT * FROM attendance 
-            WHERE member_number = ? OR member_number IN (
-                SELECT member_number FROM family_members 
+        # Get family members
+        family_members = []
+        if 'family' in member['membership_type'].lower():
+            cursor.execute('''
+                SELECT member_number, name, relationship
+                FROM family_members
                 WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
-            )
-            ORDER BY timestamp DESC
-            LIMIT 50
-        ''', (member['member_number'], user['email']))
-        attendance = [dict(row) for row in cursor.fetchall()]
+            ''', (user['email'],))
+            family_members = [dict(row) for row in cursor.fetchall()]
         
         conn.close()
         
         return jsonify({
-            'member': dict(member),
-            'family_members': family_members,
-            'attendance': attendance
+            'success': True,
+            'role': user['role'],
+            'member': {
+                'member_number': member['member_number'],
+                'first_name': member['first_name'],
+                'surname': member['surname'],
+                'email': member['email'],
+                'membership_type': member['membership_type'],
+                'expiry_date': member['expiry_date'],
+                'status': member['status'],
+                'photo_url': member['photo_url'],
+                'points': member['points'],
+                'family_members': family_members
+            }
         })
     except Exception as e:
         conn.close()
-        return jsonify({'error': 'Failed to fetch profile'}), 500
+        return jsonify({'error': 'Verification failed'}), 500
 
-@app.route('/api/scan', methods=['POST'])
+@app.route('/api/scan-qr', methods=['POST'])
 def scan_qr():
-    """Handle QR code scanning (Admin only)"""
+    """Scan QR code and record attendance (Admin only)"""
     token = request.headers.get('Authorization')
     user = verify_token(token)
     
@@ -386,138 +524,99 @@ def scan_qr():
         return jsonify({'error': 'Unauthorized - Admin access required'}), 401
     
     data = request.json
-    scanned_member_number = data.get('member_number')
-    event_name = data.get('event_name', 'General Access')
+    member_number = data.get('member_number', '').strip()
+    event_name = data.get('event_name', 'General Event').strip()
+    
+    if not member_number:
+        return jsonify({'error': 'Member number required'}), 400
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
+        # Check if member exists
         cursor.execute('''
-            SELECT m.*, m.first_name || ' ' || m.surname as full_name
-            FROM members m
-            WHERE m.member_number = ?
-        ''', (scanned_member_number,))
+            SELECT first_name, surname, status, expiry_date 
+            FROM members 
+            WHERE member_number = ?
+        ''', (member_number,))
         
         member = cursor.fetchone()
         
         if not member:
+            # Check if it's a family member
             cursor.execute('''
-                SELECT m.*, fm.name as full_name, fm.member_number as scanned_number
+                SELECT fm.name, m.status, m.expiry_date
                 FROM family_members fm
                 JOIN members m ON fm.primary_member_id = m.id
                 WHERE fm.member_number = ?
-            ''', (scanned_member_number,))
+            ''', (member_number,))
             
-            family_result = cursor.fetchone()
-            if family_result:
-                member = family_result
-                member_name = family_result['full_name']
-            else:
+            family_member = cursor.fetchone()
+            
+            if not family_member:
                 conn.close()
-                return jsonify({
-                    'success': False,
-                    'status': 'error',
-                    'message': 'Member not found'
-                }), 404
+                return jsonify({'error': 'Member not found'}), 404
+            
+            member_name = family_member['name']
+            status = family_member['status']
+            expiry_date = family_member['expiry_date']
         else:
-            member_name = member['full_name']
+            member_name = f"{member['first_name']} {member['surname']}"
+            status = member['status']
+            expiry_date = member['expiry_date']
         
-        is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
-        points_awarded = 10 if is_active else 0
+        # Check if membership is active
+        if status != 'active':
+            conn.close()
+            return jsonify({'error': 'Membership is not active', 'status': 'inactive'}), 400
+        
+        # Check if membership has expired
+        if expiry_date < datetime.now().date().isoformat():
+            conn.close()
+            return jsonify({'error': 'Membership has expired', 'status': 'expired'}), 400
+        
+        # Record attendance
+        timestamp = datetime.now().isoformat()
+        points_awarded = 10
         
         cursor.execute('''
             INSERT INTO attendance 
             (member_number, member_name, event_name, scanned_by, timestamp, points_awarded, status)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
-            scanned_member_number,
+            member_number,
             member_name,
             event_name,
-            user['email'],
-            datetime.now().isoformat(),
+            f"{user['first_name']} {user['surname']}",
+            timestamp,
             points_awarded,
-            'granted' if is_active else 'denied'
+            'present'
         ))
         
-        if is_active:
+        # Update member points (only for primary members, not family members)
+        if member:  # Only if it's a primary member
             cursor.execute('''
                 UPDATE members 
                 SET points = points + ? 
-                WHERE member_number = ? OR id = (
-                    SELECT primary_member_id FROM family_members WHERE member_number = ?
-                )
-            ''', (points_awarded, scanned_member_number, scanned_member_number))
+                WHERE member_number = ?
+            ''', (points_awarded, member_number))
         
         conn.commit()
         conn.close()
         
         return jsonify({
             'success': True,
-            'status': 'granted' if is_active else 'denied',
             'member_name': member_name,
+            'member_number': member_number,
             'points_awarded': points_awarded,
-            'message': 'Access Granted' if is_active else 'Membership Expired'
+            'timestamp': timestamp,
+            'status': 'present'
         })
     except Exception as e:
         conn.close()
-        return jsonify({'error': 'Scan failed'}), 500
-
-@app.route('/api/member-info/<member_number>', methods=['GET'])
-def get_member_info(member_number):
-    """Get member info for confirmation display"""
-    token = request.headers.get('Authorization')
-    user = verify_token(token)
-    
-    if not user or user['role'] != 'admin':
-        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    try:
-        # Check regular members
-        cursor.execute('''
-            SELECT m.*, m.first_name || " " || m.surname as member_name
-            FROM members m
-            WHERE m.member_number = ?
-        ''', (member_number,))
-        
-        member = cursor.fetchone()
-        
-        if not member:
-            # Check family members
-            cursor.execute('''
-                SELECT m.*, fm.name as member_name, fm.member_number as scanned_number
-                FROM family_members fm
-                JOIN members m ON fm.primary_member_id = m.id
-                WHERE fm.member_number = ?
-            ''', (member_number,))
-            member = cursor.fetchone()
-        
-        if member:
-            is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
-            
-            return jsonify({
-                'found': True,
-                'member_number': member_number,
-                'member_name': member['member_name'],
-                'is_active': is_active,
-                'expiry_date': member['expiry_date'],
-                'status': member['status'],
-                'membership_type': member['membership_type']
-            })
-        else:
-            return jsonify({
-                'found': False,
-                'member_number': member_number,
-                'message': 'Member not found'
-            })
-            
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
+        print(f"Scan error: {e}")
+        return jsonify({'error': 'Failed to record attendance'}), 500
 
 @app.route('/api/admin/members', methods=['GET'])
 def get_all_members():
@@ -533,17 +632,28 @@ def get_all_members():
     
     try:
         cursor.execute('''
-            SELECT m.*, 
-                   COUNT(DISTINCT fm.id) as family_member_count,
-                   COUNT(DISTINCT a.id) as attendance_count
-            FROM members m
-            LEFT JOIN family_members fm ON fm.primary_member_id = m.id
-            LEFT JOIN attendance a ON a.member_number = m.member_number
-            GROUP BY m.id
-            ORDER BY m.created_at DESC
+            SELECT member_number, first_name, surname, email, phone, 
+                   membership_type, expiry_date, status, points, is_admin
+            FROM members 
+            ORDER BY created_at DESC
         ''')
         
-        members = [dict(row) for row in cursor.fetchall()]
+        members = []
+        for row in cursor.fetchall():
+            member = dict(row)
+            
+            # Get family members
+            cursor.execute('''
+                SELECT member_number, name, relationship
+                FROM family_members
+                WHERE primary_member_id = (
+                    SELECT id FROM members WHERE member_number = ?
+                )
+            ''', (member['member_number'],))
+            
+            member['family_members'] = [dict(fam) for fam in cursor.fetchall()]
+            members.append(member)
+        
         conn.close()
         
         return jsonify({'members': members})
@@ -552,22 +662,25 @@ def get_all_members():
         return jsonify({'error': 'Failed to fetch members'}), 500
 
 @app.route('/api/admin/attendance', methods=['GET'])
-def get_all_attendance():
-    """Get all attendance records (Admin only)"""
+def get_attendance():
+    """Get attendance records (Admin only)"""
     token = request.headers.get('Authorization')
     user = verify_token(token)
     
     if not user or user['role'] != 'admin':
         return jsonify({'error': 'Unauthorized'}), 401
     
+    limit = request.args.get('limit', 100, type=int)
+    
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        limit = request.args.get('limit', 100)
         cursor.execute('''
-            SELECT * FROM attendance 
-            ORDER BY timestamp DESC 
+            SELECT member_number, member_name, event_name, scanned_by, 
+                   timestamp, points_awarded, status
+            FROM attendance 
+            ORDER BY timestamp DESC
             LIMIT ?
         ''', (limit,))
         
@@ -795,6 +908,7 @@ if __name__ == '__main__':
     print("="*60)
     print("\n✅ Server starting")
     print("✅ Database initialized")
+    print(f"✅ Photo uploads directory: {UPLOAD_FOLDER}")
     print("✅ Ready to accept connections\n")
     
     # Production uses gunicorn, development uses Flask dev server

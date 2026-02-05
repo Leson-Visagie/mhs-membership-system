@@ -273,6 +273,56 @@
             margin-bottom: 1rem;
         }
 
+        .photo-upload-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        .photo-upload-btn {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: 3px solid white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .photo-upload-btn:hover {
+            transform: scale(1.1);
+            background: #D97706;
+        }
+
+        .photo-upload-input {
+            display: none;
+        }
+
+        .photo-upload-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            border-radius: 50%;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+        }
+
         .member-name {
             font-family: 'Fraunces', serif;
             font-size: 1.5rem;
@@ -1314,19 +1364,35 @@ body::after {
                         <div class="card-status ${statusClass}">${statusText}</div>
                     </div>
                     <div class="card-body">
-                    <!-- Profile Photo with fallback -->
-                    ${member.photo_url 
-                        ? `<img src="${member.photo_url}" 
-                            alt="${member.first_name}" 
-                            class="member-photo" 
-                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        <div class="member-photo-placeholder" style="display:none;">
-                            ${member.first_name[0]}${member.surname[0]}
-                        </div>`
-                        : `<div class="member-photo-placeholder">
-                            ${member.first_name[0]}${member.surname[0]}
-                        </div>`
-                    }
+                        <div class="photo-upload-container">
+                            <input type="file" 
+                                id="profilePhotoInput" 
+                                class="photo-upload-input" 
+                                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                                onchange="handlePhotoUpload(event)">
+                            <!-- Profile Photo with fallback -->
+                            ${member.photo_url 
+                                ? `<img src="${member.photo_url}" 
+                                    alt="${member.first_name}" 
+                                    class="member-photo" 
+                                    id="memberPhoto"
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="member-photo-placeholder" style="display:none;">
+                                    ${member.first_name[0]}${member.surname[0]}
+                                </div>`
+                                : `<div class="member-photo-placeholder">
+                                    ${member.first_name[0]}${member.surname[0]}
+                                </div>`
+                            }
+                            <button class="photo-upload-btn" 
+                                    onclick="document.getElementById('profilePhotoInput').click()"
+                                    title="Upload profile photo">
+                                📷
+                            </button>
+                            <div id="photoUploadLoading" class="photo-upload-loading" style="display: none;">
+                                ⏳
+                            </div>
+                        </div>
                         <div class="member-name">${member.first_name} ${member.surname}</div>
                         <div class="member-info">
                             <div class="info-row">
@@ -1402,6 +1468,84 @@ body::after {
 
             // Update points display
             document.getElementById('memberPoints').textContent = member.points || 0;
+        }
+
+        // Handle Profile Photo Upload
+        async function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+            if (!allowedTypes.includes(file.type)) {
+                alert('❌ Invalid file type. Please upload PNG, JPG, GIF, or WEBP images only.');
+                return;
+            }
+
+            // Validate file size (5MB max)
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                alert('❌ File too large. Maximum size is 5MB.');
+                return;
+            }
+
+            // Show loading indicator
+            const loading = document.getElementById('photoUploadLoading');
+            const uploadBtn = document.querySelector('.photo-upload-btn');
+            loading.style.display = 'flex';
+            uploadBtn.style.display = 'none';
+
+            try {
+                // Create FormData and upload
+                const formData = new FormData();
+                formData.append('photo', file);
+
+                const response = await fetch(`${API_BASE}/upload-profile-photo`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': authToken
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // Update the photo in the UI
+                    const memberPhoto = document.getElementById('memberPhoto');
+                    if (memberPhoto) {
+                        // Add cache-busting timestamp to ensure fresh image
+                        memberPhoto.src = result.photo_url + '?t=' + Date.now();
+                        memberPhoto.style.display = 'block';
+                        
+                        // Hide placeholder if it exists
+                        const placeholder = memberPhoto.nextElementSibling;
+                        if (placeholder && placeholder.classList.contains('member-photo-placeholder')) {
+                            placeholder.style.display = 'none';
+                        }
+                    }
+
+                    // Update currentUser photo_url
+                    if (currentUser && currentUser.member) {
+                        currentUser.member.photo_url = result.photo_url;
+                    }
+
+                    // Show success message
+                    alert('✅ Profile photo updated successfully!');
+                } else {
+                    alert('❌ Upload failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Photo upload error:', error);
+                alert('❌ Upload failed: ' + error.message);
+            } finally {
+                // Hide loading indicator
+                loading.style.display = 'none';
+                uploadBtn.style.display = 'flex';
+                
+                // Reset file input
+                event.target.value = '';
+            }
         }
 
         // Display Attendance History
