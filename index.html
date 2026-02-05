@@ -1297,106 +1297,149 @@ body::after {
 
         // Display Member Card
         function displayMemberCard(member, familyMembers) {
-            const container = document.getElementById('memberCardContainer');
-            const statusClass = member.status === 'active' ? 'active' : 'expired';
-            const statusText = member.status === 'active' ? '✓ Active' : '✗ Expired';
+    const container = document.getElementById('memberCardContainer');
+    const statusClass = member.status === 'active' ? 'active' : 'expired';
+    const statusText = member.status === 'active' ? '✓ Active' : '✗ Expired';
 
-            let html = `
-                <div class="membership-card">
-                    <div class="card-header">
-                        <div class="card-logo">Middies Klub</div>
-                        <div class="card-status ${statusClass}">${statusText}</div>
+    // Get photo URL - use photo_url from server or generate initials
+    const photoUrl = member.photo_url;
+    const initials = (member.first_name[0] || '') + (member.surname[0] || '');
+    
+    let html = `
+        <div class="membership-card">
+            <div class="card-header">
+                <div class="card-logo">Middies Klub</div>
+                <div class="card-status ${statusClass}">${statusText}</div>
+            </div>
+            <div class="card-body">
+                <!-- Profile Photo -->
+                <div class="photo-container" style="text-align: center; margin-bottom: 1rem;">
+    `;
+    
+    if (photoUrl && photoUrl !== 'nan' && photoUrl.trim() !== '') {
+        html += `
+            <img src="${photoUrl}" 
+                 alt="${member.first_name} ${member.surname}" 
+                 class="member-photo"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="member-photo-placeholder" style="display: none;">
+                ${initials}
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="member-photo-placeholder">
+                ${initials}
+            </div>
+        `;
+    }
+    
+    html += `
+                </div>
+                <div class="member-name">${member.first_name} ${member.surname}</div>
+                <div class="member-info">
+                    <div class="info-row">
+                        <span class="info-label">Member #:</span>
+                        <span>${member.member_number}</span>
                     </div>
-                    <div class="card-body">
-                    <!-- Profile Photo with fallback -->
-                    ${member.photo_url 
-                        ? `<img src="${member.photo_url}" 
-                            alt="${member.first_name}" 
-                            class="member-photo" 
-                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        <div class="member-photo-placeholder" style="display:none;">
-                            ${member.first_name[0]}${member.surname[0]}
-                        </div>`
-                        : `<div class="member-photo-placeholder">
-                            ${member.first_name[0]}${member.surname[0]}
-                        </div>`
-                    }
-                        <div class="member-name">${member.first_name} ${member.surname}</div>
-                        <div class="member-info">
-                            <div class="info-row">
-                                <span class="info-label">Member #:</span>
-                                <span>${member.member_number}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Type:</span>
-                                <span>${member.membership_type}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Valid Until:</span>
-                                <span>${new Date(member.expiry_date).toLocaleDateString()}</span>
-                            </div>
-                        </div>
-                        <div class="qr-container">
-                            <div id="memberQR"></div>
-                        </div>
+                    <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span>${member.membership_type}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Valid Until:</span>
+                        <span>${new Date(member.expiry_date).toLocaleDateString()}</span>
                     </div>
                 </div>
-            `;
+                <div class="qr-container">
+                    <div id="memberQR"></div>
+                </div>
+            </div>
+        </div>
+    `;
 
-            // Add family members
-            if (familyMembers && familyMembers.length > 0) {
+    // Add family members section
+    if (familyMembers && familyMembers.length > 0) {
+        html += `
+            <div style="max-width: 400px; margin: 1rem auto; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px var(--shadow);">
+                <h3 style="margin-bottom: 1rem; color: var(--primary);">Family Members</h3>
+        `;
+        
+        familyMembers.forEach((fm, index) => {
+            const fmInitials = (fm.name || '').split(' ').map(n => n[0]).join('').slice(0, 2);
+            const fmPhotoUrl = fm.photo_url;
+            
+            html += `
+                <div style="padding: 1rem; border: 2px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+            `;
+            
+            if (fmPhotoUrl && fmPhotoUrl !== 'nan' && fmPhotoUrl.trim() !== '') {
                 html += `
-                    <div style="max-width: 400px; margin: 1rem auto; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px var(--shadow);">
-                        <h3 style="margin-bottom: 1rem; color: var(--primary);">Family Members</h3>
+                    <img src="${fmPhotoUrl}" 
+                         alt="${fm.name}" 
+                         style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #FFC107 0%, #FFA000 100%); display: none; align-items: center; justify-content: center; font-weight: bold; color: #1a472a;">
+                        ${fmInitials}
+                    </div>
                 `;
-                
-                familyMembers.forEach((fm, index) => {
-                    html += `
-                        <div style="padding: 1rem; border: 2px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem;">
-                            <strong>${fm.name}</strong> (${fm.relationship})
+            } else {
+                html += `
+                    <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #FFC107 0%, #FFA000 100%); display: flex; align-items: center; justify-content: center; font-weight: bold; color: #1a472a;">
+                        ${fmInitials}
+                    </div>
+                `;
+            }
+            
+            html += `
+                        <div>
+                            <strong>${fm.name}</strong> (${fm.relationship || 'Family'})
                             <br>
                             <small style="color: var(--text-secondary);">Code: ${fm.member_number}</small>
-                            <div id="familyQR${index}" style="margin-top: 0.5rem;"></div>
                         </div>
-                    `;
-                });
-                
-                html += '</div>';
-            }
+                    </div>
+                    <div id="familyQR${index}" style="margin-top: 0.5rem;"></div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+    }
 
-            container.innerHTML = html;
+    container.innerHTML = html;
 
-            // Generate main QR Code
-            new QRCode(document.getElementById('memberQR'), {
+    // Generate main QR Code
+    new QRCode(document.getElementById('memberQR'), {
+        text: JSON.stringify({
+            member_number: member.member_number,
+            name: `${member.first_name} ${member.surname}`,
+            status: member.status,
+            expiry: member.expiry_date
+        }),
+        width: 200,
+        height: 200
+    });
+
+    // Generate family member QR codes
+    if (familyMembers && familyMembers.length > 0) {
+        familyMembers.forEach((fm, index) => {
+            new QRCode(document.getElementById(`familyQR${index}`), {
                 text: JSON.stringify({
-                    member_number: member.member_number,
-                    name: `${member.first_name} ${member.surname}`,
+                    member_number: fm.member_number,
+                    name: fm.name,
                     status: member.status,
                     expiry: member.expiry_date
                 }),
-                width: 200,
-                height: 200
+                width: 150,
+                height: 150
             });
+        });
+    }
 
-            // Generate family member QR codes
-            if (familyMembers && familyMembers.length > 0) {
-                familyMembers.forEach((fm, index) => {
-                    new QRCode(document.getElementById(`familyQR${index}`), {
-                        text: JSON.stringify({
-                            member_number: fm.member_number,
-                            name: fm.name,
-                            status: member.status,
-                            expiry: member.expiry_date
-                        }),
-                        width: 150,
-                        height: 150
-                    });
-                });
-            }
-
-            // Update points display
-            document.getElementById('memberPoints').textContent = member.points || 0;
-        }
+    // Update points display
+    document.getElementById('memberPoints').textContent = member.points || 0;
+}
 
         // Display Attendance History
         function displayAttendance(attendance) {

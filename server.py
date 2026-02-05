@@ -130,6 +130,7 @@ def init_db():
             member_number TEXT UNIQUE NOT NULL,
             name TEXT NOT NULL,
             relationship TEXT,
+            photo_url TEXT,
             FOREIGN KEY (primary_member_id) REFERENCES members (id)
         )
     ''')
@@ -503,11 +504,22 @@ def get_member_profile():
         if not member:
             return jsonify({'error': 'Member not found'}), 404
         
+        # Get family members with photo URLs
         cursor.execute('''
             SELECT * FROM family_members 
             WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
         ''', (user['email'],))
-        family_members = [dict(row) for row in cursor.fetchall()]
+        family_members = []
+        for row in cursor.fetchall():
+            fm = dict(row)
+            # Ensure photo_url is included
+            if 'photo_url' not in fm or not fm['photo_url']:
+                # Generate fallback for family members too
+                name = fm.get('name', '').split(' ', 1)
+                first_name = name[0] if len(name) > 0 else 'Family'
+                last_name = name[1] if len(name) > 1 else ''
+                fm['photo_url'] = generate_fallback_avatar(first_name, last_name)
+            family_members.append(fm)
         
         cursor.execute('''
             SELECT * FROM attendance 
@@ -520,16 +532,34 @@ def get_member_profile():
         ''', (member['member_number'], user['email']))
         attendance = [dict(row) for row in cursor.fetchall()]
         
+        # Ensure member has a photo_url
+        member_dict = dict(member)
+        if not member_dict.get('photo_url'):
+            member_dict['photo_url'] = generate_fallback_avatar(
+                member_dict.get('first_name', ''), 
+                member_dict.get('surname', '')
+            )
+        
         conn.close()
         
         return jsonify({
-            'member': dict(member),
+            'member': member_dict,
             'family_members': family_members,
             'attendance': attendance
         })
     except Exception as e:
+        print(f"Profile error: {str(e)}")
         conn.close()
         return jsonify({'error': 'Failed to fetch profile'}), 500
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for monitoring"""
+    return jsonify({
+        'status': 'healthy', 
+        'timestamp': datetime.now().isoformat(),
+        'service': 'Middies Klub Membership System'
+    })
 
 @app.route('/api/scan', methods=['POST'])
 def scan_qr():
