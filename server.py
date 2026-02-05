@@ -14,7 +14,8 @@ from datetime import datetime, timedelta
 
 # Configuration
 SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-DATABASE_PATH = None
+
+DATABASE_PATH = '/data/membership.db'  # Your mount path
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 app = Flask(__name__, static_folder='static', static_url_path='')
@@ -23,6 +24,8 @@ CORS(app)
 
 def ensure_data_directory():
     """Ensure /data directory exists and is writable"""
+    global DATABASE_PATH  # Move this to the top of the function
+    
     data_dir = os.path.dirname(DATABASE_PATH)
     if not os.path.exists(data_dir):
         try:
@@ -31,7 +34,6 @@ def ensure_data_directory():
         except Exception as e:
             print(f"⚠️  Could not create data directory: {e}")
             # Fall back to local directory
-            global DATABASE_PATH
             DATABASE_PATH = './membership.db'
             print(f"   Using fallback: {DATABASE_PATH}")
     
