@@ -264,7 +264,64 @@
             z-index: 1;
         }
 
-        
+        .member-photo {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid rgba(255,255,255,0.3);
+            margin-bottom: 1rem;
+        }
+
+        .photo-upload-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        .photo-upload-btn {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: 3px solid white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .photo-upload-btn:hover {
+            transform: scale(1.1);
+            background: #D97706;
+        }
+
+        .photo-upload-input {
+            display: none;
+        }
+
+        .photo-upload-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            border-radius: 50%;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+        }
 
         .member-name {
             font-family: 'Fraunces', serif;
@@ -788,7 +845,7 @@ body::after {
 
 /* Navigation brand in gold */
 .nav-brand {
-    color: #1a472a;
+    color: #FFC107;
     text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
@@ -1307,19 +1364,35 @@ body::after {
                         <div class="card-status ${statusClass}">${statusText}</div>
                     </div>
                     <div class="card-body">
-                    <!-- Profile Photo with fallback -->
-                    ${member.photo_url 
-                        ? `<img src="${member.photo_url}" 
-                            alt="${member.first_name}" 
-                            class="member-photo" 
-                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        <div class="member-photo-placeholder" style="display:none;">
-                            ${member.first_name[0]}${member.surname[0]}
-                        </div>`
-                        : `<div class="member-photo-placeholder">
-                            ${member.first_name[0]}${member.surname[0]}
-                        </div>`
-                    }
+                        <div class="photo-upload-container">
+                            <input type="file" 
+                                id="profilePhotoInput" 
+                                class="photo-upload-input" 
+                                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                                onchange="handlePhotoUpload(event)">
+                            <!-- Profile Photo with fallback -->
+                            ${member.photo_url 
+                                ? `<img src="${member.photo_url}" 
+                                    alt="${member.first_name}" 
+                                    class="member-photo" 
+                                    id="memberPhoto"
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="member-photo-placeholder" style="display:none;">
+                                    ${member.first_name[0]}${member.surname[0]}
+                                </div>`
+                                : `<div class="member-photo-placeholder">
+                                    ${member.first_name[0]}${member.surname[0]}
+                                </div>`
+                            }
+                            <button class="photo-upload-btn" 
+                                    onclick="document.getElementById('profilePhotoInput').click()"
+                                    title="Upload profile photo">
+                                📷
+                            </button>
+                            <div id="photoUploadLoading" class="photo-upload-loading" style="display: none;">
+                                ⏳
+                            </div>
+                        </div>
                         <div class="member-name">${member.first_name} ${member.surname}</div>
                         <div class="member-info">
                             <div class="info-row">
@@ -1395,6 +1468,84 @@ body::after {
 
             // Update points display
             document.getElementById('memberPoints').textContent = member.points || 0;
+        }
+
+        // Handle Profile Photo Upload
+        async function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+            if (!allowedTypes.includes(file.type)) {
+                alert('❌ Invalid file type. Please upload PNG, JPG, GIF, or WEBP images only.');
+                return;
+            }
+
+            // Validate file size (5MB max)
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                alert('❌ File too large. Maximum size is 5MB.');
+                return;
+            }
+
+            // Show loading indicator
+            const loading = document.getElementById('photoUploadLoading');
+            const uploadBtn = document.querySelector('.photo-upload-btn');
+            loading.style.display = 'flex';
+            uploadBtn.style.display = 'none';
+
+            try {
+                // Create FormData and upload
+                const formData = new FormData();
+                formData.append('photo', file);
+
+                const response = await fetch(`${API_BASE}/upload-profile-photo`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': authToken
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // Update the photo in the UI
+                    const memberPhoto = document.getElementById('memberPhoto');
+                    if (memberPhoto) {
+                        // Add cache-busting timestamp to ensure fresh image
+                        memberPhoto.src = result.photo_url + '?t=' + Date.now();
+                        memberPhoto.style.display = 'block';
+                        
+                        // Hide placeholder if it exists
+                        const placeholder = memberPhoto.nextElementSibling;
+                        if (placeholder && placeholder.classList.contains('member-photo-placeholder')) {
+                            placeholder.style.display = 'none';
+                        }
+                    }
+
+                    // Update currentUser photo_url
+                    if (currentUser && currentUser.member) {
+                        currentUser.member.photo_url = result.photo_url;
+                    }
+
+                    // Show success message
+                    alert('✅ Profile photo updated successfully!');
+                } else {
+                    alert('❌ Upload failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Photo upload error:', error);
+                alert('❌ Upload failed: ' + error.message);
+            } finally {
+                // Hide loading indicator
+                loading.style.display = 'none';
+                uploadBtn.style.display = 'flex';
+                
+                // Reset file input
+                event.target.value = '';
+            }
         }
 
         // Display Attendance History
@@ -1893,78 +2044,59 @@ body::after {
         }
 
         async function handleFile(file) {
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            console.log("Reading Excel file...");
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            console.log("Sheet names:", workbook.SheetNames);
-            
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-            console.log("Excel data:", jsonData);
-            
-            // Process and send to backend
-            const processedData = processExcelData(jsonData);
-            console.log("Processed data:", processedData);
-            
-            const response = await fetch(`${API_BASE}/import-excel`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': authToken
-                },
-                body: JSON.stringify({ members: processedData })
-            });
-            
-            const result = await response.json();
-            console.log("Server response:", result);
-            
-            if (result.success) {
-                alert(`✅ Imported ${result.imported} members successfully!${result.errors.length > 0 ? '\n\nErrors:\n' + result.errors.join('\n') : ''}`);
-                loadAdminData();
-            } else {
-                alert('❌ Import failed: ' + (result.error || 'Unknown error'));
-            }
-        } catch (error) {
-            console.error("Upload error:", error);
-            alert('❌ Error: ' + error.message);
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    // Process and send to backend
+                    const processedData = processExcelData(jsonData);
+                    
+                    const response = await fetch(`${API_BASE}/import-excel`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': authToken
+                        },
+                        body: JSON.stringify({ members: processedData })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert(`✅ Imported ${result.imported} members successfully!${result.errors.length > 0 ? '\n\nErrors:\n' + result.errors.join('\n') : ''}`);
+                        loadAdminData();
+                    }
+                } catch (error) {
+                    alert('❌ Error: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
         }
-    };
-    reader.readAsArrayBuffer(file);
-}
 
-function processExcelData(data) {
+        function processExcelData(data) {
     return data.map((row, index) => {
         // Extract name (full name in one column)
-        const fullName = row['Name & Surname'] || '';
+        const fullName = row['Name & Surname'] || row['Name and Surname'] || '';
         const nameParts = fullName.trim().split(' ');
         const firstName = nameParts[0] || '';
         const surname = nameParts.slice(1).join(' ') || '';
         
         // Generate member number from timestamp or index
+        const timestamp = row['Timestamp'] ? new Date(row['Timestamp']).getTime() : Date.now();
         const memberNumber = `M${String(1000 + index).padStart(4, '0')}`;
         
-        // Get membership type - clean up the text
-        let membershipTypeRaw = row['Membership Type'] || 'Solo';
-        let membershipType = 'Solo';
-        let isFamily = false;
-        
-        if (membershipTypeRaw.includes('Family Package') || membershipTypeRaw.includes('Family')) {
-            membershipType = 'Family Package';
-            isFamily = true;
-        } else if (membershipTypeRaw.includes('Annual Membership') || membershipTypeRaw.includes('Solo')) {
-            membershipType = 'Solo';
-        }
-        
-        // Determine expiry (1 year from now)
+        // Get membership type and determine expiry (1 year from now)
+        const membershipType = row['Membership Type'] || 'Solo';
         const expiryDate = new Date();
         expiryDate.setFullYear(expiryDate.getFullYear() + 1);
         const expiryDateString = expiryDate.toISOString().split('T')[0];
         
-        // Get contact info - note the typo in Excel column name
-        const email = (row['Email Adress'] || '').toLowerCase().trim();
+        // Get contact info
+        const email = (row['Email Adress'] || row['Email Address'] || '').toLowerCase().trim();
         const phone = row['Contact Number'] || '';
         
         // Get photo URL
@@ -1986,12 +2118,13 @@ function processExcelData(data) {
             photoUrl = `https://ui-avatars.com/api/?name=${firstNameForAvatar}+${lastName}&background=1a472a&color=FFC107&size=200&bold=true`;
         }
         
-        // Check if admin - for now, set to No for imported members
-        const isAdmin = 'No';
+        // Check if admin (you can manually mark some emails as admin)
+        // For now, we'll check if email contains 'admin' or matches specific emails
+        const isAdmin = email.includes('admin') ? 'Yes' : 'No';
         
         // Parse family members from spouse details
         const familyMembers = [];
-        if (isFamily) {
+        if (membershipType.toLowerCase().includes('family')) {
             // Spouse details are in one field, separated by newlines
             const spouseDetails = row['If family Package - Details of spouse\nName and surname '] || '';
             if (spouseDetails && spouseDetails.trim()) {
