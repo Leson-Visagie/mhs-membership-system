@@ -315,8 +315,8 @@ def upload_photo():
             file.save(filepath)
             print(f"File saved to: {filepath}")
             
-            # Update database with relative URL
-            photo_url = f'/static/uploads/profiles/{filename}'
+            # Update database with relative URL (served from static folder root)
+            photo_url = f'/uploads/profiles/{filename}'
             
             conn = get_db()
             cursor = conn.cursor()
@@ -421,8 +421,8 @@ def handle_base64_upload(base64_data, user, request):
         
         print(f"File saved to: {filepath}")
         
-        # Update database
-        photo_url = f'/static/uploads/profiles/{filename}'
+        # Update database (serve from static folder root)
+        photo_url = f'/uploads/profiles/{filename}'
         
         conn = get_db()
         cursor = conn.cursor()
