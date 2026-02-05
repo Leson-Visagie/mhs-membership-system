@@ -1286,16 +1286,25 @@ body::after {
         // Photo Upload Functions
 let cameraStream = null;
 
+// Make sure this function is defined BEFORE loadUserData
 function updatePhotoPreview() {
+    console.log('updatePhotoPreview called');
     const container = document.getElementById('currentPhoto');
     const text = document.getElementById('currentPhotoText');
     
+    if (!container || !text) {
+        console.error('Photo preview elements not found!');
+        return;
+    }
+    
     if (currentUser && currentUser.photo_url) {
+        console.log('Setting photo URL:', currentUser.photo_url);
         container.innerHTML = `<img src="${currentUser.photo_url}" 
             alt="Profile" style="width: 100%; height: 100%; object-fit: cover;">`;
         text.textContent = 'Current profile picture';
     } else {
-        const initials = (currentUser.first_name?.[0] || '') + (currentUser.surname?.[0] || '');
+        console.log('No photo URL, using initials');
+        const initials = (currentUser?.first_name?.[0] || '') + (currentUser?.surname?.[0] || '');
         container.innerHTML = `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; 
             background: linear-gradient(135deg, #FFC107 0%, #FFA000 100%); color: #1a472a; font-size: 3rem; font-weight: bold;">
             ${initials}</div>`;
@@ -1577,6 +1586,8 @@ async function loadUserData() {
     // Get photo URL - use photo_url from server or generate initials
     const photoUrl = member.photo_url;
     const initials = (member.first_name[0] || '') + (member.surname[0] || '');
+
+    
     
     let html = `
         <div class="membership-card">
@@ -1709,7 +1720,9 @@ async function loadUserData() {
             });
         });
     }
-
+     setTimeout(() => {
+        updatePhotoPreview();
+    }, 100);
     // Update points display
     document.getElementById('memberPoints').textContent = member.points || 0;
 }
