@@ -285,6 +285,32 @@ def debug_member_photos():
         'family': [dict(row) for row in family]
     })
 
+@app.route('/api/debug/schema', methods=['GET'])
+def debug_schema():
+    """Check database schema"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check members table columns
+        cursor.execute("PRAGMA table_info(members)")
+        members_columns = cursor.fetchall()
+        
+        # Check family_members table columns
+        cursor.execute("PRAGMA table_info(family_members)")
+        family_columns = cursor.fetchall()
+        
+        conn.close()
+        
+        return jsonify({
+            'members_columns': [dict(col) for col in members_columns],
+            'family_columns': [dict(col) for col in family_columns]
+        })
+        
+    except Exception as e:
+        print(f"Schema debug error: {str(e)}")
+        conn.close()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/')
 def index():
