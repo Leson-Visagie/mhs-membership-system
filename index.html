@@ -1068,6 +1068,7 @@ body::after {
     <script>
         // Configuration - auto-detects production vs development
         const API_BASE = window.location.origin + '/api';
+        console.log('API Base URL:', API_BASE); // Add this for debugging
         let authToken = localStorage.getItem('authToken');
         let currentUser = null;
         let scannerStream = null;
@@ -1892,7 +1893,7 @@ body::after {
             });
         }
 
-function handleFile(file) {
+async function handleFile(file) {
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
@@ -1903,13 +1904,21 @@ function handleFile(file) {
             
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-            console.log("Excel data:", jsonData);
+            console.log("Excel data (first 2 rows):", jsonData.slice(0, 2));
             
-            // Process and send to backend with profile pictures
-            const processedData = processExcelDataWithPhotos(jsonData);
-            console.log("Processed data with photos:", processedData);
+            // Process and send to backend
+            const processedData = processExcelData(jsonData);
+            console.log("Processed data (first 2 rows):", processedData.slice(0, 2));
             
-            // Use the existing endpoint (no need for new one)
+            // Make sure we have auth token
+            if (!authToken) {
+                alert('❌ Please login first');
+                return;
+            }
+            
+            console.log('Sending to:', `${API_BASE}/import-excel`);
+            console.log('Auth token present:', !!authToken);
+            
             const response = await fetch(`${API_BASE}/import-excel`, {
                 method: 'POST',
                 headers: {
@@ -1918,6 +1927,19 @@ function handleFile(file) {
                 },
                 body: JSON.stringify({ members: processedData })
             });
+            
+            // Log response status
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('Non-JSON response received:', text.substring(0, 200));
+                alert('❌ Server returned non-JSON response. Check console for details.');
+                return;
+            }
             
             const result = await response.json();
             console.log("Server response:", result);

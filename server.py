@@ -242,6 +242,22 @@ def verify_token(token):
 
 # ============= API ROUTES =============
 
+@app.errorhandler(404)
+def not_found(e):
+    """Handle 404 errors - always return JSON"""
+    return jsonify({'error': 'Not found', 'path': request.path}), 404
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    """Handle 405 errors - always return JSON"""
+    return jsonify({'error': 'Method not allowed'}), 405
+
+@app.errorhandler(500)
+def server_error(e):
+    """Handle 500 errors - always return JSON"""
+    print(f"Server error: {str(e)}")
+    return jsonify({'error': 'Internal server error'}), 500
+
 @app.route('/')
 def index():
     """Serve the main HTML file"""
@@ -283,117 +299,116 @@ def generate_fallback_avatar(first_name, surname):
     """Generate UI Avatars fallback image URL"""
     return f'https://ui-avatars.com/api/?name={first_name}+{surname}&background=1a472a&color=FFC107&size=200&bold=true'
 
-@app.route('/api/admin/import-excel', methods=['POST'])
+@app.route('/api/import-excel', methods=['POST'])
 def import_excel():
-    """Import members from Excel file (JSON data from frontend)"""
-    token = request.headers.get('Authorization')
-    user = verify_token(token)
-    
-    if not user or user['role'] != 'admin':
-        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
-    
-    data = request.json.get('members', [])
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    imported = 0
-    errors = []
-    
-    for member_data in data:
-        try:
-            email = member_data.get('email', '').strip().lower()
-            member_number = member_data.get('member_number', '').strip()
-            
-            if not email or not member_number:
-                errors.append(f"Missing email or member number")
-                continue
-            
-            default_password = email
-            password_hash = hash_password(default_password)
-            
-            is_admin = 1 if str(member_data.get('is_admin', '')).lower() in ['yes', 'true', '1', 'admin'] else 0
-            
-            # Process profile picture
-            photo_url = member_data.get('photo_url', '')
-            if photo_url and photo_url != 'nan':
-                # Convert Google Drive link if needed
-                if 'drive.google.com' in photo_url:
-                    # Format 1: /open?id=FILE_ID
-                    match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', photo_url)
-                    if match:
-                        file_id = match.group(1)
-                        photo_url = f'https://drive.google.com/uc?export=view&id={file_id}'
-                    else:
-                        # Format 2: /file/d/FILE_ID/view
-                        match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', photo_url)
-                        if match:
-                            file_id = match.group(1)
-                            photo_url = f'https://drive.google.com/uc?export=view&id={file_id}'
-            else:
-                # Generate fallback avatar
-                first_name = member_data.get('first_name', '').strip()
-                surname = member_data.get('surname', '').strip()
-                if first_name and surname:
-                    photo_url = f'https://ui-avatars.com/api/?name={first_name}+{surname}&background=1a472a&color=FFC107&size=200&bold=true'
-                else:
-                    photo_url = 'https://ui-avatars.com/api/?name=Member&background=1a472a&color=FFC107&size=200&bold=true'
-            
-            cursor.execute('''
-                INSERT OR REPLACE INTO members 
-                (member_number, first_name, surname, email, phone, password_hash, 
-                 membership_type, expiry_date, status, photo_url, points, is_admin)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-            ''', (
-                member_number,
-                member_data.get('first_name', '').strip(),
-                member_data.get('surname', '').strip(),
-                email,
-                member_data.get('phone', '').strip(),
-                password_hash,
-                member_data.get('membership_type', 'Solo'),
-                member_data.get('expiry_date', ''),
-                member_data.get('status', 'active'),
-                photo_url,
-                is_admin
-            ))
-            
-            member_id = cursor.lastrowid
-            
-            if 'family_members' in member_data and member_data['family_members']:
-                for fm in member_data['family_members']:
-                    # Process family member photo
-                    fm_photo_url = fm.get('photo_url', '')
-                    if fm_photo_url and fm_photo_url != 'nan' and 'drive.google.com' in fm_photo_url:
-                        # Convert Google Drive link
-                        match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', fm_photo_url)
-                        if match:
-                            file_id = match.group(1)
-                            fm_photo_url = f'https://drive.google.com/uc?export=view&id={file_id}'
-                        else:
-                            match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', fm_photo_url)
-                            if match:
-                                file_id = match.group(1)
-                                fm_photo_url = f'https://drive.google.com/uc?export=view&id={file_id}'
-                    
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO family_members 
-                        (primary_member_id, member_number, name, relationship, photo_url)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (member_id, fm['member_number'], fm['name'], fm.get('relationship', 'Family'), fm_photo_url))
-            
-            imported += 1
-            
-        except Exception as e:
-            errors.append(f"{member_data.get('member_number', 'Unknown')}: {str(e)}")
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({
-        'success': True,
-        'imported': imported,
-        'errors': errors
-    })
+    """Import members from Excel file (Admin only)"""
+    try:
+        token = request.headers.get('Authorization')
+        user = verify_token(token)
+        
+        if not user or user['role'] != 'admin':
+            return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        members_data = data.get('members', [])
+        
+        if not members_data:
+            return jsonify({'error': 'No members data provided'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        imported = 0
+        errors = []
+        
+        for member_data in members_data:
+            try:
+                email = member_data.get('email', '').strip().lower()
+                member_number = member_data.get('member_number', '').strip()
+                
+                if not email or not member_number:
+                    errors.append(f"Missing email or member number")
+                    continue
+                
+                # Check if member already exists
+                cursor.execute('SELECT id FROM members WHERE email = ? OR member_number = ?', 
+                             (email, member_number))
+                if cursor.fetchone():
+                    errors.append(f"Member {member_number} ({email}) already exists")
+                    continue
+                
+                default_password = email  # Default password is email
+                password_hash = hash_password(default_password)
+                
+                # Process profile picture
+                photo_url = member_data.get('photo_url', '')
+                if photo_url and photo_url != 'nan':
+                    # Convert Google Drive link
+                    photo_url = convert_google_drive_link(photo_url)
+                
+                # Generate fallback avatar if no photo
+                if not photo_url:
+                    first_name = member_data.get('first_name', '').strip()
+                    surname = member_data.get('surname', '').strip()
+                    photo_url = generate_fallback_avatar(first_name, surname)
+                
+                is_admin = 1 if str(member_data.get('is_admin', '')).lower() in ['yes', 'true', '1', 'admin'] else 0
+                
+                cursor.execute('''
+                    INSERT INTO members 
+                    (member_number, first_name, surname, email, phone, password_hash, 
+                     membership_type, expiry_date, status, photo_url, points, is_admin)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                ''', (
+                    member_number,
+                    member_data.get('first_name', '').strip(),
+                    member_data.get('surname', '').strip(),
+                    email,
+                    member_data.get('phone', '').strip(),
+                    password_hash,
+                    member_data.get('membership_type', 'Solo'),
+                    member_data.get('expiry_date', ''),
+                    member_data.get('status', 'active'),
+                    photo_url,
+                    is_admin
+                ))
+                
+                member_id = cursor.lastrowid
+                
+                # Handle family members
+                if 'family_members' in member_data and member_data['family_members']:
+                    for fm in member_data['family_members']:
+                        fm_photo_url = fm.get('photo_url', '')
+                        if fm_photo_url and fm_photo_url != 'nan':
+                            fm_photo_url = convert_google_drive_link(fm_photo_url)
+                        
+                        cursor.execute('''
+                            INSERT INTO family_members 
+                            (primary_member_id, member_number, name, relationship, photo_url)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (member_id, fm['member_number'], fm['name'], 
+                              fm.get('relationship', 'Family'), fm_photo_url))
+                
+                imported += 1
+                
+            except Exception as e:
+                errors.append(f"{member_data.get('member_number', 'Unknown')}: {str(e)}")
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'imported': imported,
+            'errors': errors
+        })
+        
+    except Exception as e:
+        print(f"Import error: {str(e)}")
+        return jsonify({'error': f'Import failed: {str(e)}'}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login():
