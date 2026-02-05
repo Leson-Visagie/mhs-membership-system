@@ -6,99 +6,24 @@ Configured for production deployment
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from werkzeug.utils import secure_filename
 import sqlite3
 import hashlib
 import secrets
 import os
-import re 
-import base64
-import uuid
-import requests
 from datetime import datetime, timedelta
 
 # Configuration
 SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-
-DATABASE_PATH = '/data/membership.db'  # Your mount path
+DATABASE = os.environ.get('DATABASE_PATH', 'membership.db')
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.config['SECRET_KEY'] = SECRET_KEY
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
 CORS(app)
-
-def ensure_data_directory():
-    """Ensure /data directory exists and is writable"""
-    global DATABASE_PATH  # Move this to the top of the function
-    
-    data_dir = os.path.dirname(DATABASE_PATH)
-    if not os.path.exists(data_dir):
-        try:
-            os.makedirs(data_dir, exist_ok=True)
-            print(f"✅ Created data directory: {data_dir}")
-        except Exception as e:
-            print(f"⚠️  Could not create data directory: {e}")
-            # Fall back to local directory
-            DATABASE_PATH = './membership.db'
-            print(f"   Using fallback: {DATABASE_PATH}")
-    
-    # Check if writable
-    if os.path.exists(data_dir) and not os.access(data_dir, os.W_OK):
-        print(f"⚠️  Data directory not writable: {data_dir}")
-        DATABASE_PATH = './membership.db'
-        print(f"   Using fallback: {DATABASE_PATH}")
-
-# ============================================
-# PROFILE PICTURE HANDLING FUNCTIONS
-# ============================================
-
-def convert_google_drive_link(drive_url):
-    """
-    Convert Google Drive link to direct image URL
-    
-    Handles formats:
-    - /open?id=FILE_ID
-    - /file/d/FILE_ID  
-    - Already direct format
-    """
-    if not drive_url or not isinstance(drive_url, str):
-        return None
-    
-    # Skip if nan or empty
-    if drive_url.lower() == 'nan' or not drive_url.strip():
-        return None
-    
-    if 'drive.google.com' in drive_url:
-        # Format 1: /open?id=FILE_ID
-        match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', drive_url)
-        if match:
-            file_id = match.group(1)
-            return f'https://drive.google.com/uc?export=view&id={file_id}'
-        
-        # Format 2: /file/d/FILE_ID/view
-        match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', drive_url)
-        if match:
-            file_id = match.group(1)
-            return f'https://drive.google.com/uc?export=view&id={file_id}'
-        
-        # Format 3: Already in direct format
-        if 'uc?export=view&id=' in drive_url:
-            return drive_url
-    
-    # If not Google Drive link, return as-is (might be direct URL)
-    return drive_url
-
-def generate_fallback_avatar(first_name, surname):
-    """
-    Generate UI Avatars fallback image URL
-    Uses MHS colors (dark green background, gold text)
-    """
-    return f'https://ui-avatars.com/api/?name={first_name}+{surname}&background=1a472a&color=FFC107&size=200&bold=true'
 
 def get_db():
     """Get database connection"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -135,7 +60,6 @@ def init_db():
             member_number TEXT UNIQUE NOT NULL,
             name TEXT NOT NULL,
             relationship TEXT,
-            photo_url TEXT,
             FOREIGN KEY (primary_member_id) REFERENCES members (id)
         )
     ''')
@@ -192,8 +116,7 @@ def init_db():
                 'Solo',
                 '2030-12-31',
                 'active',
-                'https://ui-avatars.com/api/?name=Leson+Visagie&background=059669&color=fff',
-                1
+                'https://ui-avatars.com/api/?name=Leson+Visagie&background=059669&color=fff'
             ))
             print("✅ Default admin created!")
             print(f"   Username: {default_admin_email}")
@@ -204,33 +127,6 @@ def init_db():
     
     conn.commit()
     conn.close()
-    print("✅ Database initialized successfully")
-
-def migrate_photo_urls():
-    """Fix photo URLs that have /static/ prefix (migration)"""
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Find and fix broken /static/uploads/ URLs
-        cursor.execute("SELECT id, email, photo_url FROM members WHERE photo_url LIKE '%/static/uploads%'")
-        broken = cursor.fetchall()
-        
-        if broken:
-            print(f"⚠️  Found {len(broken)} members with broken photo URLs, fixing...")
-            for row in broken:
-                member_id, email, old_url = row
-                # Replace /static/uploads with /uploads
-                new_url = old_url.replace('/static/uploads', '/uploads')
-                cursor.execute("UPDATE members SET photo_url = ? WHERE id = ?", (new_url, member_id))
-                print(f"   Fixed: {email}")
-            
-            conn.commit()
-            print("✅ Photo URLs migrated successfully")
-        
-        conn.close()
-    except Exception as e:
-        print(f"⚠️  Migration error: {e}")
 
 def hash_password(password):
     """Hash password using SHA256"""
@@ -276,308 +172,6 @@ def verify_token(token):
 
 # ============= API ROUTES =============
 
-@app.errorhandler(404)
-def not_found(e):
-    """Handle 404 errors - always return JSON"""
-    return jsonify({'error': 'Not found', 'path': request.path}), 404
-
-@app.errorhandler(405)
-def method_not_allowed(e):
-    """Handle 405 errors - always return JSON"""
-    return jsonify({'error': 'Method not allowed'}), 405
-
-@app.errorhandler(500)
-def server_error(e):
-    """Handle 500 errors - always return JSON"""
-    print(f"Server error: {str(e)}")
-    return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/api/upload-photo', methods=['POST'])
-def upload_photo():
-    """Upload profile photo - handles both file uploads and base64"""
-    token = request.headers.get('Authorization')
-    user = verify_token(token)
-    
-    if not user:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    print(f"Upload photo request from: {user['email']}")
-    
-    # Check content type
-    content_type = request.headers.get('Content-Type', '')
-    print(f"Content-Type: {content_type}")
-    
-    # Handle multipart/form-data (file upload)
-    if 'multipart/form-data' in content_type:
-        if 'photo' not in request.files:
-            print("No photo file in request.files")
-            return jsonify({'error': 'No photo file uploaded'}), 400
-        
-        file = request.files['photo']
-        
-        # Validate file
-        if not file.filename:
-            return jsonify({'error': 'No file selected'}), 400
-        
-        # Check file extension
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
-        if not '.' in file.filename or \
-           file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
-            return jsonify({'error': 'Invalid file type. Use PNG, JPG, or GIF'}), 400
-        
-        print(f"Uploading file: {file.filename}, size: {file.content_length} bytes")
-        
-        # Generate unique filename with security
-        ext = file.filename.rsplit('.', 1)[1].lower()
-        filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.{ext}"
-        filename = secure_filename(filename)
-        upload_folder = 'static/uploads/profiles'
-        
-        # Ensure upload directory exists
-        if not os.path.exists(upload_folder):
-            os.makedirs(upload_folder, exist_ok=True)
-            print(f"Created upload directory: {upload_folder}")
-        
-        filepath = os.path.join(upload_folder, filename)
-        
-        try:
-            # Save the file
-            file.save(filepath)
-            print(f"File saved to: {filepath}")
-            
-            # Update database with relative URL (served from static folder root)
-            photo_url = f'/uploads/profiles/{filename}'
-            
-            conn = get_db()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                UPDATE members 
-                SET photo_url = ? 
-                WHERE email = ?
-            ''', (photo_url, user['email']))
-            
-            conn.commit()
-            conn.close()
-            
-            print(f"Database updated for {user['email']}")
-            
-            # Return full URL for frontend
-            full_url = f"{request.host_url.rstrip('/')}{photo_url}"
-            
-            return jsonify({
-                'success': True,
-                'photo_url': full_url,
-                'message': 'Photo uploaded successfully'
-            })
-            
-        except Exception as e:
-            print(f"Upload error: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'error': f'Upload failed: {str(e)}'}), 500
-    
-    # Handle application/json (base64 data)
-    elif 'application/json' in content_type:
-        data = request.json
-        print(f"JSON data received: {data.keys() if data else 'No data'}")
-        
-        if not data or 'photo_data' not in data:
-            return jsonify({'error': 'No photo data provided'}), 400
-        
-        return handle_base64_upload(data['photo_data'], user, request)
-    
-    else:
-        return jsonify({'error': 'Unsupported content type. Use multipart/form-data or application/json'}), 400
-
-def handle_base64_upload(base64_data, user, request):
-    """Handle base64 encoded image upload"""
-    try:
-        print(f"Base64 upload for {user['email']}")
-        print(f"Base64 data length: {len(base64_data) if base64_data else 0}")
-        
-        if not base64_data or base64_data == 'undefined':
-            return jsonify({'error': 'No photo data provided'}), 400
-        
-        # Check if it's a default avatar URL (not base64)
-        if base64_data.startswith('http'):
-            print("Updating to default avatar URL")
-            # It's a URL, just update the database
-            conn = get_db()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                UPDATE members 
-                SET photo_url = ? 
-                WHERE email = ?
-            ''', (base64_data, user['email']))
-            
-            conn.commit()
-            conn.close()
-            
-            return jsonify({
-                'success': True,
-                'photo_url': base64_data,
-                'message': 'Avatar updated'
-            })
-        
-        # Remove data URL prefix if present
-        if ',' in base64_data:
-            base64_data = base64_data.split(',')[1]
-        
-        # Decode base64
-        try:
-            image_data = base64.b64decode(base64_data)
-        except Exception as e:
-            print(f"Base64 decode error: {e}")
-            return jsonify({'error': 'Invalid base64 data'}), 400
-            
-        print(f"Base64 decoded, size: {len(image_data)} bytes")
-        
-        # Generate unique filename
-        filename = f"{user['member_number']}_{uuid.uuid4().hex[:8]}.jpg"
-        upload_folder = 'static/uploads/profiles'
-        
-        # Ensure upload directory exists
-        if not os.path.exists(upload_folder):
-            os.makedirs(upload_folder, exist_ok=True)
-            print(f"Created upload directory: {upload_folder}")
-        
-        filepath = os.path.join(upload_folder, filename)
-        
-        # Save the file
-        with open(filepath, 'wb') as f:
-            f.write(image_data)
-        
-        print(f"File saved to: {filepath}")
-        
-        # Update database (serve from static folder root)
-        photo_url = f'/uploads/profiles/{filename}'
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            UPDATE members 
-            SET photo_url = ? 
-            WHERE email = ?
-        ''', (photo_url, user['email']))
-        
-        conn.commit()
-        conn.close()
-        
-        print(f"Database updated for {user['email']}")
-        
-        full_url = f"{request.host_url.rstrip('/')}{photo_url}"
-        
-        return jsonify({
-            'success': True,
-            'photo_url': full_url,
-            'message': 'Photo uploaded successfully'
-        })
-        
-    except Exception as e:
-        print(f"Base64 upload error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
-
-@app.route('/api/test-image/<path:url>')
-def test_image(url):
-    """Test if image URL is accessible"""
-    try:
-        # Decode URL
-        import urllib.parse
-        url = urllib.parse.unquote(url)
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        response = requests.get(url, headers=headers, timeout=5)
-        
-        if response.status_code == 200:
-            content_type = response.headers.get('content-type', '')
-            if 'image' in content_type:
-                return jsonify({
-                    'accessible': True,
-                    'content_type': content_type,
-                    'size': len(response.content)
-                })
-        
-        return jsonify({
-            'accessible': False,
-            'status_code': response.status_code,
-            'content_type': response.headers.get('content-type')
-        })
-    except Exception as e:
-        return jsonify({
-            'accessible': False,
-            'error': str(e)
-        })
-
-
-@app.route('/api/debug/member-photos', methods=['GET'])
-def debug_member_photos():
-    """Debug endpoint to see photo URLs in database"""
-    token = request.headers.get('Authorization')
-    user = verify_token(token)
-    
-    if not user:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT member_number, first_name, surname, photo_url FROM members WHERE email = ?', (user['email'],))
-    member = cursor.fetchone()
-    
-    cursor.execute('SELECT member_number, name, photo_url FROM family_members WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)', (user['email'],))
-    family = cursor.fetchall()
-    
-    conn.close()
-    
-    return jsonify({
-        'member': dict(member) if member else None,
-        'family': [dict(row) for row in family]
-    })
-
-@app.route('/api/debug/schema', methods=['GET'])
-def debug_schema():
-    """Check database schema"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    try:
-        # Check members table columns
-        cursor.execute("PRAGMA table_info(members)")
-        members_columns = cursor.fetchall()
-        
-        # Check family_members table columns
-        cursor.execute("PRAGMA table_info(family_members)")
-        family_columns = cursor.fetchall()
-        
-        conn.close()
-        
-        return jsonify({
-            'members_columns': [dict(col) for col in members_columns],
-            'family_columns': [dict(col) for col in family_columns]
-        })
-        
-    except Exception as e:
-        print(f"Schema debug error: {str(e)}")
-        conn.close()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/uploads/<path:filename>')
-def serve_upload(filename):
-    """Serve uploaded profile photos"""
-    try:
-        return send_from_directory('static/uploads', filename)
-    except Exception as e:
-        print(f"Upload serving error for {filename}: {e}")
-        return jsonify({'error': 'File not found'}), 404
-
 @app.route('/')
 def index():
     """Serve the main HTML file"""
@@ -591,113 +185,75 @@ def health():
 @app.route('/api/import-excel', methods=['POST'])
 def import_excel():
     """Import members from Excel file (Admin only)"""
-    try:
-        token = request.headers.get('Authorization')
-        user = verify_token(token)
-        
-        if not user or user['role'] != 'admin':
-            return jsonify({'error': 'Unauthorized - Admin access required'}), 401
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        members_data = data.get('members', [])
-        
-        if not members_data:
-            return jsonify({'error': 'No members data provided'}), 400
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        imported = 0
-        errors = []
-        
-        for member_data in members_data:
-            try:
-                email = member_data.get('email', '').strip().lower()
-                member_number = member_data.get('member_number', '').strip()
-                
-                if not email or not member_number:
-                    errors.append(f"Missing email or member number")
-                    continue
-                
-                # Check if member already exists
-                cursor.execute('SELECT id FROM members WHERE email = ? OR member_number = ?', 
-                             (email, member_number))
-                if cursor.fetchone():
-                    errors.append(f"Member {member_number} ({email}) already exists")
-                    continue
-                
-                default_password = email  # Default password is email
-                password_hash = hash_password(default_password)
-                
-                # Process profile picture
-                photo_url = member_data.get('photo_url', '')
-                if photo_url and photo_url != 'nan':
-                    # Convert Google Drive link
-                    photo_url = convert_google_drive_link(photo_url)
-                
-                # Generate fallback avatar if no photo
-                if not photo_url:
-                    first_name = member_data.get('first_name', '').strip()
-                    surname = member_data.get('surname', '').strip()
-                    photo_url = generate_fallback_avatar(first_name, surname)
-                
-                is_admin = 1 if str(member_data.get('is_admin', '')).lower() in ['yes', 'true', '1', 'admin'] else 0
-                
-                cursor.execute('''
-                    INSERT INTO members 
-                    (member_number, first_name, surname, email, phone, password_hash, 
-                     membership_type, expiry_date, status, photo_url, points, is_admin)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-                ''', (
-                    member_number,
-                    member_data.get('first_name', '').strip(),
-                    member_data.get('surname', '').strip(),
-                    email,
-                    member_data.get('phone', '').strip(),
-                    password_hash,
-                    member_data.get('membership_type', 'Solo'),
-                    member_data.get('expiry_date', ''),
-                    member_data.get('status', 'active'),
-                    photo_url,
-                    is_admin
-                ))
-                
-                member_id = cursor.lastrowid
-                
-                # Handle family members
-                if 'family_members' in member_data and member_data['family_members']:
-                    for fm in member_data['family_members']:
-                        fm_photo_url = fm.get('photo_url', '')
-                        if fm_photo_url and fm_photo_url != 'nan':
-                            fm_photo_url = convert_google_drive_link(fm_photo_url)
-                        
-                        cursor.execute('''
-                            INSERT INTO family_members 
-                            (primary_member_id, member_number, name, relationship, photo_url)
-                            VALUES (?, ?, ?, ?, ?)
-                        ''', (member_id, fm['member_number'], fm['name'], 
-                              fm.get('relationship', 'Family'), fm_photo_url))
-                
-                imported += 1
-                
-            except Exception as e:
-                errors.append(f"{member_data.get('member_number', 'Unknown')}: {str(e)}")
-        
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            'success': True,
-            'imported': imported,
-            'errors': errors
-        })
-        
-    except Exception as e:
-        print(f"Import error: {str(e)}")
-        return jsonify({'error': f'Import failed: {str(e)}'}), 500
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    data = request.json.get('members', [])
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    imported = 0
+    errors = []
+    
+    for member_data in data:
+        try:
+            email = member_data.get('email', '').strip().lower()
+            member_number = member_data.get('member_number', '').strip()
+            
+            if not email or not member_number:
+                errors.append(f"Missing email or member number")
+                continue
+            
+            default_password = email
+            password_hash = hash_password(default_password)
+            
+            is_admin = 1 if str(member_data.get('is_admin', '')).lower() in ['yes', 'true', '1', 'admin'] else 0
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO members 
+                (member_number, first_name, surname, email, phone, password_hash, 
+                 membership_type, expiry_date, status, photo_url, points, is_admin)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            ''', (
+                member_number,
+                member_data.get('first_name', '').strip(),
+                member_data.get('surname', '').strip(),
+                email,
+                member_data.get('phone', '').strip(),
+                password_hash,
+                member_data.get('membership_type', 'Solo'),
+                member_data.get('expiry_date', ''),
+                member_data.get('status', 'active'),
+                member_data.get('photo_url', f'https://ui-avatars.com/api/?name={member_data.get("first_name", "U")}+{member_data.get("surname", "U")}&background=059669&color=fff'),
+                is_admin
+            ))
+            
+            member_id = cursor.lastrowid
+            
+            if 'family_members' in member_data and member_data['family_members']:
+                for fm in member_data['family_members']:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO family_members 
+                        (primary_member_id, member_number, name, relationship)
+                        VALUES (?, ?, ?, ?)
+                    ''', (member_id, fm['member_number'], fm['name'], fm['relationship']))
+            
+            imported += 1
+            
+        except Exception as e:
+            errors.append(f"{member_data.get('member_number', 'Unknown')}: {str(e)}")
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'imported': imported,
+        'errors': errors
+    })
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -792,22 +348,11 @@ def get_member_profile():
         if not member:
             return jsonify({'error': 'Member not found'}), 404
         
-        # Get family members with photo URLs
         cursor.execute('''
             SELECT * FROM family_members 
             WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
         ''', (user['email'],))
-        family_members = []
-        for row in cursor.fetchall():
-            fm = dict(row)
-            # Ensure photo_url is included
-            if 'photo_url' not in fm or not fm['photo_url']:
-                # Generate fallback for family members too
-                name = fm.get('name', '').split(' ', 1)
-                first_name = name[0] if len(name) > 0 else 'Family'
-                last_name = name[1] if len(name) > 1 else ''
-                fm['photo_url'] = generate_fallback_avatar(first_name, last_name)
-            family_members.append(fm)
+        family_members = [dict(row) for row in cursor.fetchall()]
         
         cursor.execute('''
             SELECT * FROM attendance 
@@ -820,34 +365,16 @@ def get_member_profile():
         ''', (member['member_number'], user['email']))
         attendance = [dict(row) for row in cursor.fetchall()]
         
-        # Ensure member has a photo_url
-        member_dict = dict(member)
-        if not member_dict.get('photo_url'):
-            member_dict['photo_url'] = generate_fallback_avatar(
-                member_dict.get('first_name', ''), 
-                member_dict.get('surname', '')
-            )
-        
         conn.close()
         
         return jsonify({
-            'member': member_dict,
+            'member': dict(member),
             'family_members': family_members,
             'attendance': attendance
         })
     except Exception as e:
-        print(f"Profile error: {str(e)}")
         conn.close()
         return jsonify({'error': 'Failed to fetch profile'}), 500
-
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint for monitoring"""
-    return jsonify({
-        'status': 'healthy', 
-        'timestamp': datetime.now().isoformat(),
-        'service': 'Middies Klub Membership System'
-    })
 
 @app.route('/api/scan', methods=['POST'])
 def scan_qr():
@@ -1261,11 +788,8 @@ def server_error(e):
     """Handle 500 errors"""
     return jsonify({'error': 'Internal server error'}), 500
 
-ensure_data_directory()
-
 if __name__ == '__main__':
     init_db()
-    migrate_photo_urls()
     print("\n" + "="*60)
     print("🎓 School Membership System Server")
     print("="*60)
@@ -1280,4 +804,3 @@ else:
     # This runs when imported by gunicorn on Render
     print("📦 Running in production mode - initializing database...")
     init_db()
-    migrate_photo_urls()
