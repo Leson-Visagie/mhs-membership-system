@@ -2205,76 +2205,155 @@ body::after {
             reader.readAsArrayBuffer(file);
         }
 
-        function processExcelData(data) {
+function processExcelData(data) {
     return data.map((row, index) => {
-        // Extract name (full name in one column)
-        const fullName = row['Name & Surname'] || row['Name and Surname'] || '';
-        const nameParts = fullName.trim().split(' ');
-        const firstName = nameParts[0] || '';
-        const surname = nameParts.slice(1).join(' ') || '';
+        // Try different possible column names for name
+        let fullName = '';
         
-        // Get membership type and determine expiry (11 months from now)
-        const membershipType = row['Membership Type'] || 'Solo';
+        // Try various column names
+        const nameColumns = ['Name & Surname', 'Name and Surname', 'Name', 'Full Name', 'Member Name'];
+        for (const col of nameColumns) {
+            if (row[col]) {
+                fullName = row[col];
+                break;
+            }
+        }
+        
+        // If no standard column found, try to find any column that might contain a name
+        if (!fullName) {
+            for (const key in row) {
+                if (typeof row[key] === 'string' && row[key].includes(' ')) {
+                    const parts = row[key].trim().split(' ');
+                    if (parts.length >= 2 && parts[0].length > 1 && parts[1].length > 1) {
+                        fullName = row[key];
+                        break;
+                    }
+                }
+            }
+        }
+        
+        const nameParts = fullName ? fullName.trim().split(' ') : ['Unknown', 'Member'];
+        const firstName = nameParts[0] || 'Unknown';
+        const surname = nameParts.slice(1).join(' ') || 'Member';
+        
+        // Try different possible column names for email
+        let email = '';
+        const emailColumns = ['Email Adress', 'Email Address', 'Email', 'E-mail', 'Email Address:', 'E-mail Address'];
+        for (const col of emailColumns) {
+            if (row[col]) {
+                email = row[col].toString().toLowerCase().trim();
+                break;
+            }
+        }
+        
+        // Try different possible column names for phone
+        let phone = '';
+        const phoneColumns = ['Contact Number', 'Phone', 'Phone Number', 'Cell Number', 'Mobile', 'Telephone'];
+        for (const col of phoneColumns) {
+            if (row[col]) {
+                phone = row[col].toString().trim();
+                break;
+            }
+        }
+        
+        // Clean phone number
+        if (phone) {
+            phone = phone.replace(/\D/g, ''); // Remove non-digits
+            if (phone.length === 9 && phone.startsWith('8')) {
+                phone = '0' + phone; // Add leading zero if missing
+            }
+        }
+        
+        // Try different possible column names for membership type
+        let membershipType = 'Solo';
+        const typeColumns = ['Membership Type', 'Package', 'Membership', 'Type'];
+        for (const col of typeColumns) {
+            if (row[col]) {
+                const type = row[col].toString().toLowerCase();
+                if (type.includes('family')) {
+                    membershipType = 'Family Package(2 Parents) R800';
+                } else if (type.includes('solo') || type.includes('annual')) {
+                    membershipType = 'Annual Membership(solo person) R500';
+                } else {
+                    membershipType = row[col];
+                }
+                break;
+            }
+        }
+        
+        // Calculate expiry date (11 months from now)
         const expiryDate = new Date();
         expiryDate.setMonth(expiryDate.getMonth() + 11);
         const expiryDateString = expiryDate.toISOString().split('T')[0];
         
-        // Get contact info
-        const email = (row['Email Adress'] || row['Email Address'] || '').toLowerCase().trim();
-        const phone = row['Contact Number'] || '';
+        // Try to get photo URL from various columns
+        let photoUrl = '';
+        const photoColumns = ['Upload profile picture', 'Profile Picture', 'Photo', 'Picture URL'];
+        for (const col of photoColumns) {
+            if (row[col]) {
+                photoUrl = row[col].toString().trim();
+                break;
+            }
+        }
         
-        // Get photo URL
-        let photoUrl = row['Upload profile picture'] || '';
-
-        // If it's a Google Drive link, convert it
+        // Convert Google Drive links
         if (photoUrl && photoUrl.includes('drive.google.com')) {
             const fileIdMatch = photoUrl.match(/[-\w]{25,}/);
             if (fileIdMatch) {
                 photoUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[0]}`;
             }
         }
-
+        
         // If no photo, use initials
-        if (!photoUrl) {
-            const names = (row['Name & Surname'] || 'Member').split(' ');
-            const firstNameForAvatar = names[0] || 'M';
-            const lastName = names[1] || '';
-            photoUrl = `https://ui-avatars.com/api/?name=${firstNameForAvatar}+${lastName}&background=1a472a&color=FFC107&size=200&bold=true`;
+        if (!photoUrl || photoUrl === 'NA' || photoUrl === 'N/A') {
+            photoUrl = `https://ui-avatars.com/api/?name=${firstName}+${surname}&background=1a472a&color=FFC107&size=200&bold=true&format=svg`;
         }
         
-        // Check if admin (you can manually mark some emails as admin)
-        // For now, we'll check if email contains 'admin' or matches specific emails
-        const isAdmin = email.includes('admin') ? 'Yes' : 'No';
+        // Check for admin status
+        const isAdmin = email.includes('admin') || 
+                       email.includes('@schoolsystem.com') || 
+                       email.includes('@middelburghoerskool') ? 'Yes' : 'No';
         
         // Parse family members from spouse details
         const familyMembers = [];
         if (membershipType.toLowerCase().includes('family')) {
-            // Spouse details are in one field, separated by newlines
-            const spouseDetails = row['If family Package - Details of spouse\nName and surname '] || '';
-            if (spouseDetails && spouseDetails.trim()) {
-                const lines = spouseDetails.split('\n').filter(l => l.trim());
+            // Try different column names for spouse details
+            const spouseColumns = [
+                'If family Package - Details of spouse\nName and surname ',
+                'Spouse Details',
+                'Spouse',
+                'Partner Details'
+            ];
+            
+            let spouseDetails = '';
+            for (const col of spouseColumns) {
+                if (row[col]) {
+                    spouseDetails = row[col];
+                    break;
+                }
+            }
+            
+            if (spouseDetails && spouseDetails.trim() && spouseDetails !== 'No' && spouseDetails !== 'NA') {
+                const lines = spouseDetails.toString().split('\n').filter(l => l.trim());
                 if (lines.length >= 1) {
                     const spouseName = lines[0].trim();
-                    const spouseId = lines[1] || '';
-                    const spousePhone = lines[2] || '';
-                    const spouseEmail = lines[3] || '';
                     
-                    if (spouseName) {
+                    if (spouseName && spouseName !== 'No package') {
                         familyMembers.push({
                             name: spouseName,
-                            member_number: `${memberNumber}-S1`,
+                            member_number: `TEMP-F${index + 1}`, // Temp number, server will fix
                             relationship: 'Spouse'
                         });
                     }
                 }
             }
         }
-
-        // Create member object (server will generate member_number)
+        
+        // Create member object
         const member = {
             first_name: firstName,
             surname: surname,
-            email: email,
+            email: email || `${firstName.toLowerCase()}.${surname.toLowerCase()}@middiesklub.temp`,
             phone: phone,
             membership_type: membershipType,
             expiry_date: expiryDateString,
@@ -2283,9 +2362,9 @@ body::after {
             is_admin: isAdmin,
             family_members: familyMembers
         };
-
+        
         return member;
-    });
+    }).filter(member => member.first_name !== 'Unknown'); // Filter out invalid rows
 }
     </script>
 </body>

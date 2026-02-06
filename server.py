@@ -283,7 +283,7 @@ def serve_profile_photo(filename):
 
 @app.route('/api/import-excel', methods=['POST'])
 def import_excel():
-    """Import members from Excel file (Admin only)"""
+    """Import members from Excel file (Admin only) - Smart duplicate checking with auto-numbering"""
     token = request.headers.get('Authorization')
     user = verify_token(token)
     
@@ -297,47 +297,104 @@ def import_excel():
     imported = 0
     errors = []
     skipped = 0
+    updated = 0
     
-    # Get the highest existing member number to continue from there
-    cursor.execute("SELECT member_number FROM members ORDER BY member_number DESC LIMIT 1")
+    # Get the highest existing member number
+    cursor.execute("SELECT MAX(CAST(REPLACE(member_number, 'M', '') AS INTEGER)) FROM members WHERE member_number LIKE 'M%'")
     result = cursor.fetchone()
-    if result and result[0]:
-        # Extract number from M1234 format
-        last_num = int(result[0].replace('M', ''))
-        next_number = last_num + 1
-    else:
-        next_number = 1000  # Start from M1000 if no members exist
+    next_number = result[0] + 1 if result[0] else 1000
     
     for idx, member_data in enumerate(data):
         try:
             email = member_data.get('email', '').strip().lower()
             phone = member_data.get('phone', '').strip()
+            first_name = member_data.get('first_name', '').strip()
+            surname = member_data.get('surname', '').strip()
             
             if not email:
-                errors.append(f"Missing email for row {idx + 1}")
+                errors.append(f"Row {idx + 1}: Missing email")
                 continue
             
-            # Check if member already exists by email or phone
+            if not first_name or not surname:
+                errors.append(f"Row {idx + 1}: Missing name (first or last)")
+                continue
+            
+            full_name = f"{first_name} {surname}"
+            
+            # Check if member already exists by email
+            cursor.execute('SELECT member_number, first_name, surname FROM members WHERE email = ?', (email,))
+            existing_by_email = cursor.fetchone()
+            
+            if existing_by_email:
+                existing_name = f"{existing_by_email[1]} {existing_by_email[2]}"
+                
+                if existing_name.lower() == full_name.lower():
+                    # Same person with same email - skip
+                    skipped += 1
+                    errors.append(f"Skipped {full_name} ({email}) - already exists as {existing_by_email[0]}")
+                    continue
+                else:
+                    # Different person with same email - generate unique email
+                    base_email = email.split('@')[0]
+                    domain = email.split('@')[1] if '@' in email else 'middiesklub.com'
+                    new_email = f"{base_email}.{next_number}@{domain}"
+                    email = new_email
+                    errors.append(f"Row {idx + 1}: Original email in use, using {new_email} instead")
+            
+            # Also check by phone if provided
+            existing_member_number = None
+            if phone:
+                cursor.execute('SELECT member_number, first_name, surname FROM members WHERE phone = ?', (phone,))
+                existing_by_phone = cursor.fetchone()
+                
+                if existing_by_phone:
+                    existing_name = f"{existing_by_phone[1]} {existing_by_phone[2]}"
+                    
+                    if existing_name.lower() == full_name.lower():
+                        # Same person, different email - update email
+                        cursor.execute('UPDATE members SET email = ? WHERE phone = ?', (email, phone))
+                        updated += 1
+                        errors.append(f"Updated {existing_by_phone[0]} - updated email to {email}")
+                        conn.commit()
+                        continue
+                    else:
+                        # Different person with same phone - mark as duplicate but continue
+                        errors.append(f"Row {idx + 1}: Phone {phone} already used by {existing_name}, skipping phone field")
+                        phone = ''  # Clear phone to avoid constraint violation
+            
+            # Check if same person exists by name (fuzzy match)
             cursor.execute('''
-                SELECT member_number FROM members 
-                WHERE email = ? OR (phone = ? AND phone != '')
-            ''', (email, phone))
-            existing = cursor.fetchone()
+                SELECT member_number, first_name, surname, email 
+                FROM members 
+                WHERE LOWER(first_name || ' ' || surname) = LOWER(?)
+            ''', (full_name,))
             
-            if existing:
-                skipped += 1
-                errors.append(f"Skipped {email} - already exists as {existing[0]}")
-                continue
+            existing_by_name = cursor.fetchone()
+            
+            if existing_by_name:
+                # Person with same name exists - check if it's likely the same person
+                existing_email = existing_by_name[3]
+                if '@middiesklub.temp' in existing_email or email.endswith('@middiesklub.temp'):
+                    # Likely same person with temp email - update email
+                    cursor.execute('UPDATE members SET email = ? WHERE member_number = ?', (email, existing_by_name[0]))
+                    updated += 1
+                    errors.append(f"Updated {existing_by_name[0]} - updated email from temp to {email}")
+                    conn.commit()
+                    continue
+                else:
+                    # Different person with same name - add with number suffix
+                    first_name = f"{first_name}{next_number}"
+                    errors.append(f"Row {idx + 1}: Name '{full_name}' already exists, using '{first_name} {surname}' instead")
             
             # Generate new sequential member number
             member_number = f"M{str(next_number).zfill(4)}"
             next_number += 1
             
             # Set default password: use phone if available, otherwise use email
-            if phone and len(phone) == 10 and phone.startswith('0'):
-                default_password = phone
+            if phone and len(phone) >= 10 and phone[0].isdigit():
+                default_password = phone[-10:] if len(phone) > 10 else phone
             else:
-                default_password = email
+                default_password = email.split('@')[0]  # Use username part of email
             
             password_hash = hash_password(default_password)
             
@@ -350,15 +407,15 @@ def import_excel():
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             ''', (
                 member_number,
-                member_data.get('first_name', '').strip(),
-                member_data.get('surname', '').strip(),
+                first_name,
+                surname,
                 email,
                 phone,
                 password_hash,
                 member_data.get('membership_type', 'Solo'),
                 member_data.get('expiry_date', ''),
                 member_data.get('status', 'active'),
-                member_data.get('photo_url', f'https://ui-avatars.com/api/?name={member_data.get("first_name", "U")}+{member_data.get("surname", "U")}&background=059669&color=fff'),
+                member_data.get('photo_url', f'https://ui-avatars.com/api/?name={first_name}+{surname}&background=1a472a&color=FFC107'),
                 is_admin
             ))
             
@@ -366,16 +423,37 @@ def import_excel():
             
             # Handle family members
             family_members = member_data.get('family_members', [])
+            family_counter = 1
+            
             for fam in family_members:
                 try:
+                    # Check if family member already exists
+                    fam_name = fam.get('name', '').strip()
+                    if not fam_name:
+                        continue
+                    
+                    # Check if this family member already exists for this primary
+                    cursor.execute('''
+                        SELECT id FROM family_members 
+                        WHERE primary_member_id = ? AND LOWER(name) = LOWER(?)
+                    ''', (member_id, fam_name))
+                    
+                    if cursor.fetchone():
+                        errors.append(f"Family member '{fam_name}' already exists for {member_number}")
+                        continue
+                    
+                    # Generate unique family member number
+                    family_member_number = f"{member_number}-F{family_counter}"
+                    family_counter += 1
+                    
                     cursor.execute('''
                         INSERT INTO family_members 
                         (primary_member_id, member_number, name, relationship)
                         VALUES (?, ?, ?, ?)
                     ''', (
                         member_id,
-                        fam.get('member_number', ''),
-                        fam.get('name', ''),
+                        family_member_number,
+                        fam_name,
                         fam.get('relationship', 'Family')
                     ))
                 except Exception as e:
@@ -383,6 +461,12 @@ def import_excel():
             
             imported += 1
             
+        except sqlite3.IntegrityError as e:
+            if 'UNIQUE constraint failed' in str(e):
+                errors.append(f"Row {idx + 1}: Duplicate entry - {str(e)}")
+                skipped += 1
+            else:
+                errors.append(f"Row {idx + 1}: Database error - {str(e)}")
         except Exception as e:
             errors.append(f"Error importing row {idx + 1}: {str(e)}")
     
@@ -393,7 +477,8 @@ def import_excel():
         'success': True,
         'imported': imported,
         'skipped': skipped,
-        'errors': errors
+        'updated': updated,
+        'errors': errors[:50]  # Limit errors to first 50
     })
 
 @app.route('/api/login', methods=['POST'])
