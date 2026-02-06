@@ -2187,7 +2187,15 @@ body::after {
                     const result = await response.json();
                     
                     if (result.success) {
-                        alert(`✅ Imported ${result.imported} members successfully!${result.errors.length > 0 ? '\n\nErrors:\n' + result.errors.join('\n') : ''}`);
+                        let message = `✅ Import Complete!\n\n`;
+                        message += `• New members added: ${result.imported}\n`;
+                        if (result.skipped > 0) {
+                            message += `• Existing members skipped: ${result.skipped}\n`;
+                        }
+                        if (result.errors.length > 0) {
+                            message += `\nDetails:\n${result.errors.join('\n')}`;
+                        }
+                        alert(message);
                         loadAdminData();
                     }
                 } catch (error) {
@@ -2204,10 +2212,6 @@ body::after {
         const nameParts = fullName.trim().split(' ');
         const firstName = nameParts[0] || '';
         const surname = nameParts.slice(1).join(' ') || '';
-        
-        // Generate member number from timestamp or index
-        const timestamp = row['Timestamp'] ? new Date(row['Timestamp']).getTime() : Date.now();
-        const memberNumber = `M${String(1000 + index).padStart(4, '0')}`;
         
         // Get membership type and determine expiry (11 months from now)
         const membershipType = row['Membership Type'] || 'Solo';
@@ -2266,9 +2270,8 @@ body::after {
             }
         }
 
-        // Create member object
+        // Create member object (server will generate member_number)
         const member = {
-            member_number: memberNumber,
             first_name: firstName,
             surname: surname,
             email: email,

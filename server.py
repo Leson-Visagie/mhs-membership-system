@@ -296,23 +296,55 @@ def import_excel():
     
     imported = 0
     errors = []
+    skipped = 0
     
-    for member_data in data:
+    # Get the highest existing member number to continue from there
+    cursor.execute("SELECT member_number FROM members ORDER BY member_number DESC LIMIT 1")
+    result = cursor.fetchone()
+    if result and result[0]:
+        # Extract number from M1234 format
+        last_num = int(result[0].replace('M', ''))
+        next_number = last_num + 1
+    else:
+        next_number = 1000  # Start from M1000 if no members exist
+    
+    for idx, member_data in enumerate(data):
         try:
             email = member_data.get('email', '').strip().lower()
-            member_number = member_data.get('member_number', '').strip()
+            phone = member_data.get('phone', '').strip()
             
-            if not email or not member_number:
-                errors.append(f"Missing email or member number")
+            if not email:
+                errors.append(f"Missing email for row {idx + 1}")
                 continue
             
-            default_password = email
+            # Check if member already exists by email or phone
+            cursor.execute('''
+                SELECT member_number FROM members 
+                WHERE email = ? OR (phone = ? AND phone != '')
+            ''', (email, phone))
+            existing = cursor.fetchone()
+            
+            if existing:
+                skipped += 1
+                errors.append(f"Skipped {email} - already exists as {existing[0]}")
+                continue
+            
+            # Generate new sequential member number
+            member_number = f"M{str(next_number).zfill(4)}"
+            next_number += 1
+            
+            # Set default password: use phone if available, otherwise use email
+            if phone and len(phone) == 10 and phone.startswith('0'):
+                default_password = phone
+            else:
+                default_password = email
+            
             password_hash = hash_password(default_password)
             
             is_admin = 1 if str(member_data.get('is_admin', '')).lower() in ['yes', 'true', '1', 'admin'] else 0
             
             cursor.execute('''
-                INSERT OR REPLACE INTO members 
+                INSERT INTO members 
                 (member_number, first_name, surname, email, phone, password_hash, 
                  membership_type, expiry_date, status, photo_url, points, is_admin)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
@@ -321,7 +353,7 @@ def import_excel():
                 member_data.get('first_name', '').strip(),
                 member_data.get('surname', '').strip(),
                 email,
-                member_data.get('phone', '').strip(),
+                phone,
                 password_hash,
                 member_data.get('membership_type', 'Solo'),
                 member_data.get('expiry_date', ''),
@@ -337,7 +369,7 @@ def import_excel():
             for fam in family_members:
                 try:
                     cursor.execute('''
-                        INSERT OR REPLACE INTO family_members 
+                        INSERT INTO family_members 
                         (primary_member_id, member_number, name, relationship)
                         VALUES (?, ?, ?, ?)
                     ''', (
@@ -352,7 +384,7 @@ def import_excel():
             imported += 1
             
         except Exception as e:
-            errors.append(f"Error importing {member_data.get('email', 'unknown')}: {str(e)}")
+            errors.append(f"Error importing row {idx + 1}: {str(e)}")
     
     conn.commit()
     conn.close()
@@ -360,6 +392,7 @@ def import_excel():
     return jsonify({
         'success': True,
         'imported': imported,
+        'skipped': skipped,
         'errors': errors
     })
 
