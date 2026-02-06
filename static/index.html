@@ -62,7 +62,7 @@
             font-family: 'Fraunces', serif;
             font-size: 1.5rem;
             font-weight: 900;
-            color: var(--primary);
+            color: #1a472a;
             display: flex;
             align-items: center;
             gap: 0.5rem;
@@ -843,9 +843,9 @@ body::after {
     background: linear-gradient(135deg, #1a472a 0%, #0f3320 100%);
 }
 
-/* Navigation brand in gold */
+/* Navigation brand in dark green */
 .nav-brand {
-    color: #FFC107;
+    color: #1a472a;
     text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
@@ -944,7 +944,7 @@ body::after {
                     <div class="form-group">
                         <label for="loginPassword">Password</label>
                         <div class="password-wrapper">
-                            <input type="password" id="loginPassword" placeholder="Your password" required>
+                            <input type="password" id="loginPassword" placeholder="Default: your phone or email" required>
                             <button type="button" class="password-toggle" onclick="togglePassword()" title="Show/Hide password">
                                 👁️
                             </button>
@@ -953,7 +953,8 @@ body::after {
                     <button type="submit" class="btn btn-primary">Login</button>
                 </form>
                 <p style="text-align: center; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
-                    Login with your email or phone number (format: 0829285154)
+                    Login with your email or phone number (0829285154)<br>
+                    <small>Default password is your phone number or email</small>
                 </p>
             </div>
         </div>
