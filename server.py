@@ -696,7 +696,7 @@ def get_member_profile():
 
 @app.route('/api/scan', methods=['POST'])
 def scan():
-    """Handle QR code scanning (Admin only)"""
+    """Handle QR code scanning (Admin only) - Now supports names or member numbers"""
     token = request.headers.get('Authorization')
     user = verify_token(token)
     
@@ -704,42 +704,59 @@ def scan():
         return jsonify({'error': 'Unauthorized - Admin access required'}), 401
     
     data = request.json
-    scanned_member_number = data.get('member_number')
+    scanned_data = data.get('member_data', '').strip()  # Could be name or member number
     event_name = data.get('event_name', 'General Access')
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
+        # First try to match by member number
         cursor.execute('''
             SELECT m.*, m.first_name || ' ' || m.surname as full_name
             FROM members m
             WHERE m.member_number = ?
-        ''', (scanned_member_number,))
+        ''', (scanned_data,))
         
         member = cursor.fetchone()
         
         if not member:
+            # Try to match by name (first + last name)
             cursor.execute('''
-                SELECT m.*, fm.name as full_name, fm.member_number as scanned_number
-                FROM family_members fm
-                JOIN members m ON fm.primary_member_id = m.id
-                WHERE fm.member_number = ?
-            ''', (scanned_member_number,))
+                SELECT m.*, m.first_name || ' ' || m.surname as full_name
+                FROM members m
+                WHERE m.first_name || ' ' || m.surname = ?
+            ''', (scanned_data,))
             
-            family_result = cursor.fetchone()
-            if family_result:
-                member = family_result
-                member_name = family_result['full_name']
+            member = cursor.fetchone()
+            
+            if not member:
+                # Try to match by just first name (for family members)
+                cursor.execute('''
+                    SELECT m.*, fm.name as full_name, fm.member_number as scanned_number
+                    FROM family_members fm
+                    JOIN members m ON fm.primary_member_id = m.id
+                    WHERE fm.name = ?
+                ''', (scanned_data,))
+                
+                family_result = cursor.fetchone()
+                if family_result:
+                    member = family_result
+                    member_name = family_result['full_name']
+                    scanned_member_number = family_result['scanned_number']
+                else:
+                    conn.close()
+                    return jsonify({
+                        'success': False,
+                        'status': 'error',
+                        'message': f'Member not found: {scanned_data}'
+                    }), 404
             else:
-                conn.close()
-                return jsonify({
-                    'success': False,
-                    'status': 'error',
-                    'message': 'Member not found'
-                }), 404
+                member_name = member['full_name']
+                scanned_member_number = member['member_number']
         else:
             member_name = member['full_name']
+            scanned_member_number = member['member_number']
         
         is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
         points_awarded = 10 if is_active else 0
@@ -774,11 +791,13 @@ def scan():
             'success': True,
             'status': 'granted' if is_active else 'denied',
             'member_name': member_name,
+            'scanned_data': scanned_data,
             'points_awarded': points_awarded,
             'message': 'Access Granted' if is_active else 'Membership Expired'
         })
     except Exception as e:
         conn.close()
+        print(f"Scan error: {e}")
         return jsonify({'error': 'Scan failed'}), 500
 
 @app.route('/api/member-info/<member_number>', methods=['GET'])

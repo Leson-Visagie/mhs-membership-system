@@ -1432,122 +1432,166 @@ body::after {
 
         // Display Member Card
         function displayMemberCard(member, familyMembers) {
-            const container = document.getElementById('memberCardContainer');
-            const statusClass = member.status === 'active' ? 'active' : 'expired';
-            const statusText = member.status === 'active' ? '✓ Active' : '✗ Expired';
+    const container = document.getElementById('memberCardContainer');
+    const statusClass = member.status === 'active' ? 'active' : 'expired';
+    const statusText = member.status === 'active' ? '✓ Active' : '✗ Expired';
 
-            let html = `
-                <div class="membership-card">
-                    <div class="card-header">
-                        <div class="card-logo">Middies Klub</div>
-                        <div class="card-status ${statusClass}">${statusText}</div>
-                    </div>
-                    <div class="card-body">
-                        <div class="photo-upload-container">
-                            <input type="file" 
-                                id="profilePhotoInput" 
-                                class="photo-upload-input" 
-                                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
-                                onchange="handlePhotoUpload(event)">
-                            <!-- Profile Photo with fallback -->
-                            ${member.photo_url 
-                                ? `<img src="${member.photo_url}" 
-                                    alt="${member.first_name}" 
-                                    class="member-photo" 
-                                    id="memberPhoto"
-                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <div class="member-photo-placeholder" style="display:none;">
-                                    ${member.first_name[0]}${member.surname[0]}
-                                </div>`
-                                : `<div class="member-photo-placeholder">
-                                    ${member.first_name[0]}${member.surname[0]}
-                                </div>`
-                            }
-                            <button class="photo-upload-btn" 
-                                    onclick="document.getElementById('profilePhotoInput').click()"
-                                    title="Upload profile photo">
-                                📷
-                            </button>
-                            <div id="photoUploadLoading" class="photo-upload-loading" style="display: none;">
-                                ⏳
-                            </div>
-                        </div>
-                        <div class="member-name">${member.first_name} ${member.surname}</div>
-                        <div class="member-info">
-                            <div class="info-row">
-                                <span class="info-label">Member #:</span>
-                                <span>${member.member_number}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Type:</span>
-                                <span>${member.membership_type}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Valid Until:</span>
-                                <span>${new Date(member.expiry_date).toLocaleDateString()}</span>
-                            </div>
-                        </div>
-                        <div class="qr-container">
-                            <div id="memberQR"></div>
-                        </div>
+    let html = `
+        <div class="membership-card">
+            <div class="card-header">
+                <div class="card-logo">Middies Klub</div>
+                <div class="card-status ${statusClass}">${statusText}</div>
+            </div>
+            <div class="card-body">
+                <div class="photo-upload-container">
+                    <input type="file" 
+                        id="profilePhotoInput" 
+                        class="photo-upload-input" 
+                        accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                        onchange="handlePhotoUpload(event)">
+                    <!-- Profile Photo with fallback -->
+                    ${member.photo_url 
+                        ? `<img src="${member.photo_url}" 
+                            alt="${member.first_name}" 
+                            class="member-photo" 
+                            id="memberPhoto"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="member-photo-placeholder" style="display:none;">
+                            ${member.first_name[0]}${member.surname[0]}
+                        </div>`
+                        : `<div class="member-photo-placeholder">
+                            ${member.first_name[0]}${member.surname[0]}
+                        </div>`
+                    }
+                    <button class="photo-upload-btn" 
+                            onclick="document.getElementById('profilePhotoInput').click()"
+                            title="Upload profile photo">
+                        📷
+                    </button>
+                    <div id="photoUploadLoading" class="photo-upload-loading" style="display: none;">
+                        ⏳
                     </div>
                 </div>
-            `;
+                <div class="member-name">${member.first_name} ${member.surname}</div>
+                <div class="member-info">
+                    <div class="info-row">
+                        <span class="info-label">Member #:</span>
+                        <span>${member.member_number}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span>${member.membership_type}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Valid Until:</span>
+                        <span>${new Date(member.expiry_date).toLocaleDateString()}</span>
+                    </div>
+                </div>
+                <div class="qr-container">
+                    <div id="memberQR"></div>
+                </div>
+            </div>
+        </div>
+    `;
 
-            // Add family members
-            if (familyMembers && familyMembers.length > 0) {
-                html += `
-                    <div style="max-width: 400px; margin: 1rem auto; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px var(--shadow);">
-                        <h3 style="margin-bottom: 1rem; color: var(--primary);">Family Members</h3>
-                `;
+    // Add family members
+    if (familyMembers && familyMembers.length > 0) {
+        html += `
+            <div style="max-width: 400px; margin: 1rem auto; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px var(--shadow);">
+                <h3 style="margin-bottom: 1rem; color: var(--primary);">Family Members</h3>
+        `;
+        
+        familyMembers.forEach((fm, index) => {
+            html += `
+                <div style="padding: 1rem; border: 2px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem;">
+                    <strong>${fm.name}</strong> (${fm.relationship})
+                    <br>
+                    <small style="color: var(--text-secondary);">Code: ${fm.member_number}</small>
+                    <div id="familyQR${index}" style="margin-top: 0.5rem;"></div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+
+    // Generate main QR Code - USING NAME AND SURNAME ONLY
+    try {
+        // Use just "Firstname Surname" format
+        const qrData = `${member.first_name} ${member.surname}`;
+        
+        console.log(`QR Code data: "${qrData}" (${qrData.length} characters)`);
+        
+        if (qrData.length > 800) {
+            console.warn(`QR data too long (${qrData.length} > 800), using fallback`);
+            document.getElementById('memberQR').innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 24px; margin-bottom: 10px;">👤</div>
+                    <strong>${member.first_name} ${member.surname}</strong>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">Member Name</div>
+                </div>
+            `;
+        } else {
+            new QRCode(document.getElementById('memberQR'), {
+                text: qrData,
+                width: 200,
+                height: 200,
+                colorDark: "#1a472a",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+    } catch (error) {
+        console.error("QR code generation error:", error);
+        document.getElementById('memberQR').innerHTML = `
+            <div style="text-align: center; padding: 20px; background: white; border-radius: 8px;">
+                <strong>${member.first_name} ${member.surname}</strong>
+                <div style="font-size: 12px; color: #666;">Member Name</div>
+            </div>
+        `;
+    }
+
+    // Generate family member QR codes
+    if (familyMembers && familyMembers.length > 0) {
+        familyMembers.forEach((fm, index) => {
+            try {
+                // For family members, use just their name
+                const familyQrData = fm.name;
                 
-                familyMembers.forEach((fm, index) => {
-                    html += `
-                        <div style="padding: 1rem; border: 2px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem;">
-                            <strong>${fm.name}</strong> (${fm.relationship})
-                            <br>
-                            <small style="color: var(--text-secondary);">Code: ${fm.member_number}</small>
-                            <div id="familyQR${index}" style="margin-top: 0.5rem;"></div>
+                console.log(`Family QR ${index}: "${familyQrData}" (${familyQrData.length} chars)`);
+                
+                if (familyQrData.length > 800) {
+                    document.getElementById(`familyQR${index}`).innerHTML = `
+                        <div style="text-align: center; padding: 10px; background: white; border-radius: 4px;">
+                            <strong>${fm.name}</strong>
                         </div>
                     `;
-                });
-                
-                html += '</div>';
-            }
-
-            container.innerHTML = html;
-
-            // Generate main QR Code
-            new QRCode(document.getElementById('memberQR'), {
-                text: JSON.stringify({
-                    member_number: member.member_number,
-                    name: `${member.first_name} ${member.surname}`,
-                    status: member.status,
-                    expiry: member.expiry_date
-                }),
-                width: 200,
-                height: 200
-            });
-
-            // Generate family member QR codes
-            if (familyMembers && familyMembers.length > 0) {
-                familyMembers.forEach((fm, index) => {
+                } else {
                     new QRCode(document.getElementById(`familyQR${index}`), {
-                        text: JSON.stringify({
-                            member_number: fm.member_number,
-                            name: fm.name,
-                            status: member.status,
-                            expiry: member.expiry_date
-                        }),
+                        text: familyQrData,
                         width: 150,
-                        height: 150
+                        height: 150,
+                        colorDark: "#1a472a",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
                     });
-                });
+                }
+            } catch (error) {
+                console.error(`Error generating QR for family member ${fm.name}:`, error);
+                document.getElementById(`familyQR${index}`).innerHTML = `
+                    <div style="text-align: center; padding: 10px; background: white; border-radius: 4px;">
+                        <strong>${fm.name}</strong>
+                    </div>
+                `;
             }
+        });
+    }
 
-            // Update points display
-            document.getElementById('memberPoints').textContent = member.points || 0;
-        }
+    // Update points display
+    document.getElementById('memberPoints').textContent = member.points || 0;
+}
 
         // Handle Profile Photo Upload
         async function handlePhotoUpload(event) {
@@ -1711,21 +1755,16 @@ body::after {
         }
 
         
-
-        function handleQRDetection(qrData) {
-            try {
-                const data = JSON.parse(qrData);
-                showConfirmationModal(data);
-            } catch (error) {
-                // If not JSON, try direct member number
-                if (qrData.trim().length > 0) {
-                    showConfirmationModal({ member_number: qrData.trim() });
-                } else {
-                    isProcessing = false;
-                    lastScannedCode = null;
-                }
-            }
-        }
+function handleQRDetection(qrData) {
+    try {
+        // Try to parse as JSON (for backward compatibility)
+        const data = JSON.parse(qrData);
+        showConfirmationModal(data);
+    } catch (error) {
+        // If not JSON, it's probably just a name or member number
+        showConfirmationModal({ member_data: qrData.trim() });
+    }
+}
 
         function showConfirmationModal(qrData) {
             // Create modal if it doesn't exist
@@ -1785,48 +1824,50 @@ body::after {
             fetchMemberInfo(qrData.member_number);
         }
 
-        async function fetchMemberInfo(memberNumber) {
-            try {
-                const response = await fetch(`${API_BASE}/member-info/${memberNumber}`, {
-                    headers: { 'Authorization': authToken }
-                });
-                
-                const data = await response.json();
-                
-                // Update modal with member info
-                const scanInfo = document.getElementById('scanInfo');
-                const scanLoading = document.getElementById('scanLoading');
-                
-                if (data.found) {
-                    document.getElementById('scanMemberName').textContent = data.member_name;
-                    document.getElementById('scanStatus').innerHTML = data.is_active ? 
-                        '<span style="color: var(--success); font-weight: 600;">✅ ACTIVE</span>' :
-                        '<span style="color: var(--danger); font-weight: 600;">❌ INACTIVE</span>';
-                    document.getElementById('scanEventName').textContent = document.getElementById('eventName').value || 'General Access';
-                    
-                    // Show expiration if not active
-                    if (!data.is_active) {
-                        const statusEl = document.getElementById('scanStatus');
-                        statusEl.innerHTML += `<br><small style="color: var(--danger);">Expired: ${new Date(data.expiry_date).toLocaleDateString()}</small>`;
-                    }
-                } else {
-                    document.getElementById('scanMemberName').textContent = 'Member Not Found';
-                    document.getElementById('scanStatus').innerHTML = '<span style="color: var(--danger); font-weight: 600;">❌ NOT FOUND</span>';
-                }
-                
-                // Show info, hide loading
-                scanLoading.style.display = 'none';
-                scanInfo.style.display = 'block';
-                
-            } catch (error) {
-                console.error('Error fetching member info:', error);
-                document.getElementById('scanLoading').innerHTML = `
-                    <div style="color: var(--danger); text-align: center;">
-                        <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
-                        <p>Error loading member info</p>
-                    </div>`;
+        async function fetchMemberInfo(memberData) {
+    try {
+        const response = await fetch(`${API_BASE}/member-info/${encodeURIComponent(memberData)}`, {
+            headers: { 'Authorization': authToken }
+        });
+        
+        const data = await response.json();
+        
+        // Update modal with member info
+        const scanInfo = document.getElementById('scanInfo');
+        const scanLoading = document.getElementById('scanLoading');
+        
+        if (data.found) {
+            document.getElementById('scanMemberName').textContent = data.member_name;
+            document.getElementById('scanMemberNumber').textContent = data.member_number || 'N/A';
+            document.getElementById('scanStatus').innerHTML = data.is_active ? 
+                '<span style="color: var(--success); font-weight: 600;">✅ ACTIVE</span>' :
+                '<span style="color: var(--danger); font-weight: 600;">❌ INACTIVE</span>';
+            document.getElementById('scanEventName').textContent = document.getElementById('eventName').value || 'General Access';
+            
+            // Show expiration if not active
+            if (!data.is_active) {
+                const statusEl = document.getElementById('scanStatus');
+                statusEl.innerHTML += `<br><small style="color: var(--danger);">Expired: ${new Date(data.expiry_date).toLocaleDateString()}</small>`;
             }
+        } else {
+            document.getElementById('scanMemberName').textContent = 'Member Not Found';
+            document.getElementById('scanMemberNumber').textContent = memberData;
+            document.getElementById('scanStatus').innerHTML = '<span style="color: var(--danger); font-weight: 600;">❌ NOT FOUND</span>';
         }
+        
+        // Show info, hide loading
+        scanLoading.style.display = 'none';
+        scanInfo.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Error fetching member info:', error);
+        document.getElementById('scanLoading').innerHTML = `
+            <div style="color: var(--danger); text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+                <p>Error loading member info</p>
+            </div>`;
+    }
+}
 
         async function confirmScan() {
             const modal = document.getElementById('scanConfirmModal');
