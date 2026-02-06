@@ -365,38 +365,53 @@ def import_excel():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    """Login endpoint"""
+    """Login endpoint - supports email or phone number"""
     data = request.json
-    email = data.get('email', '').strip().lower()
+    email_or_phone = data.get('email', '').strip()
     password = data.get('password', '').strip()
     
-    if not email or not password:
-        return jsonify({'error': 'Email and password required'}), 400
+    if not email_or_phone or not password:
+        return jsonify({'error': 'Email/phone and password required'}), 400
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
         password_hash = hash_password(password)
-        cursor.execute('''
-            SELECT member_number, first_name, surname, email, membership_type, 
-                   expiry_date, status, photo_url, points, is_admin
-            FROM members 
-            WHERE email = ? AND password_hash = ?
-        ''', (email, password_hash))
+        
+        # Check if input is a phone number (10 digits starting with 0)
+        is_phone = email_or_phone.isdigit() and len(email_or_phone) == 10 and email_or_phone.startswith('0')
+        
+        if is_phone:
+            # Login with phone number
+            cursor.execute('''
+                SELECT member_number, first_name, surname, email, membership_type, 
+                       expiry_date, status, photo_url, points, is_admin
+                FROM members 
+                WHERE phone = ? AND password_hash = ?
+            ''', (email_or_phone, password_hash))
+        else:
+            # Login with email (convert to lowercase)
+            email_or_phone = email_or_phone.lower()
+            cursor.execute('''
+                SELECT member_number, first_name, surname, email, membership_type, 
+                       expiry_date, status, photo_url, points, is_admin
+                FROM members 
+                WHERE email = ? AND password_hash = ?
+            ''', (email_or_phone, password_hash))
         
         member = cursor.fetchone()
         
         if not member:
             conn.close()
-            return jsonify({'error': 'Invalid email or password'}), 401
+            return jsonify({'error': 'Invalid credentials'}), 401
         
         # Check if membership is active
         if member['status'] != 'active':
             conn.close()
             return jsonify({'error': 'Account is not active'}), 401
         
-        # Generate session token
+        # Generate session token (use email for session, not phone)
         token = generate_token()
         role = 'admin' if member['is_admin'] == 1 else 'member'
         expires_at = (datetime.now() + timedelta(days=7)).isoformat()
@@ -404,7 +419,7 @@ def login():
         cursor.execute('''
             INSERT INTO sessions (email, token, role, expires_at)
             VALUES (?, ?, ?, ?)
-        ''', (email, token, role, expires_at))
+        ''', (member['email'], token, role, expires_at))
         
         conn.commit()
         
@@ -415,7 +430,7 @@ def login():
                 SELECT member_number, name, relationship
                 FROM family_members
                 WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
-            ''', (email,))
+            ''', (member['email'],))
             family_members = [dict(row) for row in cursor.fetchall()]
         
         conn.close()

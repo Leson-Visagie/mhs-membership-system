@@ -889,7 +889,30 @@ body::after {
         height: 90px;
         font-size: 2rem;
     }
-}    
+}
+
+/* Password toggle button */
+.password-wrapper {
+    position: relative;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+}
+
+.password-toggle:hover {
+    color: var(--primary);
+}
     </style>
 
 
@@ -915,17 +938,22 @@ body::after {
                 <div id="loginError" class="alert error" style="display: none;"></div>
                 <form onsubmit="handleLogin(event)">
                     <div class="form-group">
-                        <label for="loginEmail">Email Address</label>
-                        <input type="email" id="loginEmail" placeholder="your.email@example.com" required>
+                        <label for="loginEmail">Email or Phone Number</label>
+                        <input type="text" id="loginEmail" placeholder="email@example.com or 0829285154" required>
                     </div>
                     <div class="form-group">
                         <label for="loginPassword">Password</label>
-                        <input type="password" id="loginPassword" placeholder="Your password (default: your email)" required>
+                        <div class="password-wrapper">
+                            <input type="password" id="loginPassword" placeholder="Your password" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword()" title="Show/Hide password">
+                                👁️
+                            </button>
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary">Login</button>
                 </form>
                 <p style="text-align: center; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
-                    Enter your username and password to access your membership.
+                    Login with your email or phone number (format: 0829285154)
                 </p>
             </div>
         </div>
@@ -1143,17 +1171,50 @@ body::after {
         });
 
         // Authentication
+        function togglePassword() {
+            const passwordInput = document.getElementById('loginPassword');
+            const toggleBtn = document.querySelector('.password-toggle');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleBtn.textContent = '🙈';
+                toggleBtn.title = 'Hide password';
+            } else {
+                passwordInput.type = 'password';
+                toggleBtn.textContent = '👁️';
+                toggleBtn.title = 'Show password';
+            }
+        }
+
         async function handleLogin(event) {
             event.preventDefault();
             
-            const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+            let emailOrPhone = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
+            
+            // Check if it's a phone number (only digits and starts with 0)
+            const isPhone = /^0\d{9}$/.test(emailOrPhone);
+            
+            if (isPhone) {
+                // Validate phone format: must be exactly 10 digits starting with 0
+                if (emailOrPhone.length !== 10) {
+                    document.getElementById('loginError').textContent = 'Phone number must be 10 digits (e.g., 0829285154)';
+                    document.getElementById('loginError').style.display = 'block';
+                    return;
+                }
+            } else {
+                // It's an email, convert to lowercase
+                emailOrPhone = emailOrPhone.toLowerCase();
+            }
             
             try {
                 const response = await fetch(`${API_BASE}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: email, password: password })
+                    body: JSON.stringify({ 
+                        email: emailOrPhone,
+                        password: password 
+                    })
                 });
                 
                 const data = await response.json();
