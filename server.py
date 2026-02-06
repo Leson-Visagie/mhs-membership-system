@@ -149,6 +149,25 @@ def hash_password(password):
     """Hash password using SHA256"""
     return hashlib.sha256(password.encode()).hexdigest()
 
+def normalize_name(name):
+    """Normalize a name by removing diacritics and converting to uppercase"""
+    if not name:
+        return ''
+    
+    try:
+        # For Python 3, we can use unicodedata to normalize
+        import unicodedata
+        # Normalize to NFKD form to separate diacritics
+        normalized = unicodedata.normalize('NFKD', name)
+        # Remove diacritical marks
+        normalized = ''.join(c for c in normalized if not unicodedata.combining(c))
+        # Keep only letters and spaces, convert to uppercase
+        normalized = ''.join(c for c in normalized if c.isalpha() or c.isspace())
+        return normalized.upper().strip()
+    except:
+        # Fallback: simple uppercase
+        return name.upper().strip()
+
 def generate_token():
     """Generate secure random token"""
     return secrets.token_urlsafe(32)
@@ -266,6 +285,8 @@ def upload_profile_photo():
     except Exception as e:
         print(f"Photo upload error: {e}")
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
+
+
 
 @app.route('/api/profile-photo/<filename>')
 def serve_profile_photo(filename):
@@ -696,7 +717,7 @@ def get_member_profile():
 
 @app.route('/api/scan', methods=['POST'])
 def scan():
-    """Handle QR code scanning (Admin only) - Now supports names or member numbers"""
+    """Handle QR code scanning (Admin only)"""
     token = request.headers.get('Authorization')
     user = verify_token(token)
     
@@ -704,13 +725,16 @@ def scan():
         return jsonify({'error': 'Unauthorized - Admin access required'}), 401
     
     data = request.json
-    scanned_data = data.get('member_data', '').strip()  # Could be name or member number
+    scanned_data = data.get('member_data', '').strip()
     event_name = data.get('event_name', 'General Access')
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
+        # Normalize the scanned data for comparison
+        normalized_scanned = normalize_name(scanned_data)
+        
         # First try to match by member number
         cursor.execute('''
             SELECT m.*, m.first_name || ' ' || m.surname as full_name
@@ -721,23 +745,23 @@ def scan():
         member = cursor.fetchone()
         
         if not member:
-            # Try to match by name (first + last name)
+            # Try to match by normalized name (first + last name)
             cursor.execute('''
                 SELECT m.*, m.first_name || ' ' || m.surname as full_name
                 FROM members m
-                WHERE m.first_name || ' ' || m.surname = ?
-            ''', (scanned_data,))
+                WHERE normalize_name(m.first_name || ' ' || m.surname) = ?
+            ''', (normalized_scanned,))
             
             member = cursor.fetchone()
             
             if not member:
-                # Try to match by just first name (for family members)
+                # Try to match family members by normalized name
                 cursor.execute('''
                     SELECT m.*, fm.name as full_name, fm.member_number as scanned_number
                     FROM family_members fm
                     JOIN members m ON fm.primary_member_id = m.id
-                    WHERE fm.name = ?
-                ''', (scanned_data,))
+                    WHERE normalize_name(fm.name) = ?
+                ''', (normalized_scanned,))
                 
                 family_result = cursor.fetchone()
                 if family_result:

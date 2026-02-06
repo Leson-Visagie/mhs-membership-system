@@ -1431,7 +1431,7 @@ body::after {
         }
 
         // Display Member Card
-        function displayMemberCard(member, familyMembers) {
+function displayMemberCard(member, familyMembers) {
     const container = document.getElementById('memberCardContainer');
     const statusClass = member.status === 'active' ? 'active' : 'expired';
     const statusText = member.status === 'active' ? '✓ Active' : '✗ Expired';
@@ -1517,15 +1517,17 @@ body::after {
 
     container.innerHTML = html;
 
-    // Generate main QR Code - USING NAME AND SURNAME ONLY
+    // Generate main QR Code - WITH SPECIAL CHARACTER HANDLING
     try {
-        // Use just "Firstname Surname" format
-        const qrData = `${member.first_name} ${member.surname}`;
+        // Use just "Firstname Surname" format - normalize special characters
+        const normalizedName = normalizeName(`${member.first_name} ${member.surname}`);
+        const qrData = normalizedName;
         
         console.log(`QR Code data: "${qrData}" (${qrData.length} characters)`);
+        console.log(`Original: "${member.first_name} ${member.surname}"`);
         
-        if (qrData.length > 800) {
-            console.warn(`QR data too long (${qrData.length} > 800), using fallback`);
+        if (qrData.length > 200) {
+            console.warn(`QR data too long (${qrData.length} > 200), using fallback`);
             document.getElementById('memberQR').innerHTML = `
                 <div style="text-align: center; padding: 20px;">
                     <div style="font-size: 24px; margin-bottom: 10px;">👤</div>
@@ -1540,7 +1542,7 @@ body::after {
                 height: 200,
                 colorDark: "#1a472a",
                 colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
+                correctLevel: QRCode.CorrectLevel.L // Use lower correction level for more capacity
             });
         }
     } catch (error) {
@@ -1553,16 +1555,17 @@ body::after {
         `;
     }
 
-    // Generate family member QR codes
+    // Generate family member QR codes - WITH SPECIAL CHARACTER HANDLING
     if (familyMembers && familyMembers.length > 0) {
         familyMembers.forEach((fm, index) => {
             try {
-                // For family members, use just their name
-                const familyQrData = fm.name;
+                // For family members, normalize the name
+                const normalizedFamilyName = normalizeName(fm.name);
                 
-                console.log(`Family QR ${index}: "${familyQrData}" (${familyQrData.length} chars)`);
+                console.log(`Family QR ${index}: Original: "${fm.name}", Normalized: "${normalizedFamilyName}" (${normalizedFamilyName.length} chars)`);
                 
-                if (familyQrData.length > 800) {
+                if (normalizedFamilyName.length > 200) {
+                    console.warn(`Family QR data too long, using fallback for ${fm.name}`);
                     document.getElementById(`familyQR${index}`).innerHTML = `
                         <div style="text-align: center; padding: 10px; background: white; border-radius: 4px;">
                             <strong>${fm.name}</strong>
@@ -1570,12 +1573,12 @@ body::after {
                     `;
                 } else {
                     new QRCode(document.getElementById(`familyQR${index}`), {
-                        text: familyQrData,
+                        text: normalizedFamilyName,
                         width: 150,
                         height: 150,
                         colorDark: "#1a472a",
                         colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.H
+                        correctLevel: QRCode.CorrectLevel.L // Lower correction for more capacity
                     });
                 }
             } catch (error) {
@@ -1591,6 +1594,20 @@ body::after {
 
     // Update points display
     document.getElementById('memberPoints').textContent = member.points || 0;
+}
+
+// Add this helper function to normalize names
+function normalizeName(name) {
+    if (!name) return '';
+    
+    // Remove diacritics (accents) and special characters
+    return name
+        .normalize('NFD') // Decompose accented characters
+        .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
+        .replace(/[^a-zA-Z\s]/g, '') // Remove non-alphabetic characters except spaces
+        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+        .trim()
+        .toUpperCase(); // Convert to uppercase for consistency
 }
 
         // Handle Profile Photo Upload
