@@ -2372,43 +2372,62 @@ function processExcelData(data) {
                        email.includes('@schoolsystem.com') || 
                        email.includes('@middelburghoerskool') ? 'Yes' : 'No';
         
-        // Parse family members from spouse details
+        // Parse spouse - also create them as a full member account
         const familyMembers = [];
+        const results = []; // Will hold primary + spouse member objects
+
         if (membershipType.toLowerCase().includes('family')) {
-            // Try different column names for spouse details
-            const spouseColumns = [
-                'If family Package - Details of spouse\nName and surname ',
-                'Spouse Details',
-                'Spouse',
-                'Partner Details'
-            ];
-            
-            let spouseDetails = '';
-            for (const col of spouseColumns) {
-                if (row[col]) {
-                    spouseDetails = row[col];
-                    break;
+            const spouseName  = (row['If family Package - Details of spouse\nName and surname '] || '').toString().trim();
+            const spousePhone = (row['Contact details of spouse:'] || '').toString().replace(/\D/g, '');
+            const spouseEmail = (row['Email of spouse:'] || '').toString().trim().toLowerCase();
+
+            if (spouseName && spouseName !== 'No' && spouseName !== 'NA' && spouseName !== 'No package') {
+                // Format spouse phone with leading zero
+                const spousePhoneClean = spousePhone.length === 9 ? '0' + spousePhone : spousePhone;
+
+                // Generate email if missing
+                const spouseEmailFinal = (spouseEmail && spouseEmail !== 'none' && spouseEmail.includes('@'))
+                    ? spouseEmail
+                    : spousePhoneClean
+                        ? `${spousePhoneClean}@middiesklub.temp`
+                        : `${spouseName.toLowerCase().replace(/\s+/g, '.')}@middiesklub.temp`;
+
+                // Spouse photo
+                let spousePhotoUrl = row['Upload profile picture of spouse'] || '';
+                if (spousePhotoUrl && spousePhotoUrl.includes('drive.google.com')) {
+                    const m = spousePhotoUrl.match(/[-\w]{25,}/);
+                    if (m) spousePhotoUrl = `https://drive.google.com/uc?export=view&id=${m[0]}`;
                 }
-            }
-            
-            if (spouseDetails && spouseDetails.trim() && spouseDetails !== 'No' && spouseDetails !== 'NA') {
-                const lines = spouseDetails.toString().split('\n').filter(l => l.trim());
-                if (lines.length >= 1) {
-                    const spouseName = lines[0].trim();
-                    
-                    if (spouseName && spouseName !== 'No package') {
-                        familyMembers.push({
-                            name: spouseName,
-                            member_number: `TEMP-F${index + 1}`, // Temp number, server will fix
-                            relationship: 'Spouse'
-                        });
-                    }
+                if (!spousePhotoUrl) {
+                    const sp = spouseName.split(' ');
+                    spousePhotoUrl = `https://ui-avatars.com/api/?name=${sp[0]}+${sp.slice(1).join('+')||''}&background=1a472a&color=FFC107&size=200&bold=true`;
                 }
+
+                const spouseNameParts = spouseName.split(' ');
+                const spouseFirst = spouseNameParts[0] || '';
+                const spouseSur   = spouseNameParts.slice(1).join(' ') || '';
+
+                // Add spouse as a full member entry (gets their own login)
+                results.push({
+                    first_name: spouseFirst,
+                    surname: spouseSur,
+                    email: spouseEmailFinal,
+                    phone: spousePhoneClean,
+                    membership_type: membershipType,
+                    expiry_date: expiryDateString,
+                    status: 'active',
+                    photo_url: spousePhotoUrl,
+                    is_admin: 'No',
+                    family_members: []
+                });
+
+                // Also track on primary member's card
+                familyMembers.push({ name: spouseName, relationship: 'Spouse' });
             }
         }
-        
-        // Create member object
-        const member = {
+
+        // Primary member
+        results.unshift({
             first_name: firstName,
             surname: surname,
             email: email || `${firstName.toLowerCase()}.${surname.toLowerCase()}@middiesklub.temp`,
@@ -2419,10 +2438,10 @@ function processExcelData(data) {
             photo_url: photoUrl,
             is_admin: isAdmin,
             family_members: familyMembers
-        };
-        
-        return member;
-    }).filter(member => member.first_name !== 'Unknown'); // Filter out invalid rows
+        });
+
+        return results;
+    }).flat().filter(member => member.first_name && member.first_name !== 'Unknown');
 }
     </script>
 </body>
