@@ -2392,36 +2392,43 @@ function processExcelData(data) {
                         ? `${spousePhoneClean}@middiesklub.temp`
                         : `${spouseName.toLowerCase().replace(/\s+/g, '.')}@middiesklub.temp`;
 
-                // Spouse photo
-                let spousePhotoUrl = row['Upload profile picture of spouse'] || '';
-                if (spousePhotoUrl && spousePhotoUrl.includes('drive.google.com')) {
-                    const m = spousePhotoUrl.match(/[-\w]{25,}/);
-                    if (m) spousePhotoUrl = `https://drive.google.com/uc?export=view&id=${m[0]}`;
+                // ✅ SKIP if spouse details are identical to primary (member filled in their own details)
+                const isSameAsPrimary = 
+                    (spouseEmailFinal === email) || 
+                    (spousePhoneClean && spousePhoneClean === phone.replace(/\D/g, ''));
+
+                if (!isSameAsPrimary) {
+                    // Spouse photo
+                    let spousePhotoUrl = row['Upload profile picture of spouse'] || '';
+                    if (spousePhotoUrl && spousePhotoUrl.includes('drive.google.com')) {
+                        const m = spousePhotoUrl.match(/[-\w]{25,}/);
+                        if (m) spousePhotoUrl = `https://drive.google.com/uc?export=view&id=${m[0]}`;
+                    }
+                    if (!spousePhotoUrl) {
+                        const sp = spouseName.split(' ');
+                        spousePhotoUrl = `https://ui-avatars.com/api/?name=${sp[0]}+${sp.slice(1).join('+')||''}&background=1a472a&color=FFC107&size=200&bold=true`;
+                    }
+
+                    const spouseNameParts = spouseName.split(' ');
+                    const spouseFirst = spouseNameParts[0] || '';
+                    const spouseSur   = spouseNameParts.slice(1).join(' ') || '';
+
+                    // Add spouse as a full member entry (gets their own login)
+                    results.push({
+                        first_name: spouseFirst,
+                        surname: spouseSur,
+                        email: spouseEmailFinal,
+                        phone: spousePhoneClean,
+                        membership_type: membershipType,
+                        expiry_date: expiryDateString,
+                        status: 'active',
+                        photo_url: spousePhotoUrl,
+                        is_admin: 'No',
+                        family_members: []
+                    });
                 }
-                if (!spousePhotoUrl) {
-                    const sp = spouseName.split(' ');
-                    spousePhotoUrl = `https://ui-avatars.com/api/?name=${sp[0]}+${sp.slice(1).join('+')||''}&background=1a472a&color=FFC107&size=200&bold=true`;
-                }
 
-                const spouseNameParts = spouseName.split(' ');
-                const spouseFirst = spouseNameParts[0] || '';
-                const spouseSur   = spouseNameParts.slice(1).join(' ') || '';
-
-                // Add spouse as a full member entry (gets their own login)
-                results.push({
-                    first_name: spouseFirst,
-                    surname: spouseSur,
-                    email: spouseEmailFinal,
-                    phone: spousePhoneClean,
-                    membership_type: membershipType,
-                    expiry_date: expiryDateString,
-                    status: 'active',
-                    photo_url: spousePhotoUrl,
-                    is_admin: 'No',
-                    family_members: []
-                });
-
-                // Also track on primary member's card
+                // Always track on primary member's card
                 familyMembers.push({ name: spouseName, relationship: 'Spouse' });
             }
         }
