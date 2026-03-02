@@ -1268,6 +1268,70 @@ def delete_member(member_number):
         print(f"Delete member error: {e}")
         return jsonify({'error': f'Failed to delete member: {str(e)}'}), 500
 
+@app.route('/api/admin/toggle-admin/<member_number>', methods=['POST'])
+def toggle_admin_status(member_number):
+    """Toggle admin status for a member (Admin only, only klub@middies.co.za can demote)"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Get current member info
+        cursor.execute('SELECT id, first_name, surname, email, is_admin FROM members WHERE member_number = ?', (member_number,))
+        member = cursor.fetchone()
+        
+        if not member:
+            conn.close()
+            return jsonify({'error': 'Member not found'}), 404
+        
+        member_id = member[0]
+        member_name = f"{member[1]} {member[2]}"
+        member_email = member[3]
+        current_admin_status = member[4]
+        
+        # Prevent modifying your own admin status
+        if member_email == user['email']:
+            conn.close()
+            return jsonify({'error': 'Cannot modify your own admin status'}), 400
+        
+        # Determine new status
+        new_admin_status = 0 if current_admin_status == 1 else 1
+        
+        # Special rule: Only klub@middies.co.za can REMOVE admin privileges
+        if current_admin_status == 1 and new_admin_status == 0:
+            if user['email'] != 'klub@middies.co.za':
+                conn.close()
+                return jsonify({'error': 'Only klub@middies.co.za can remove admin privileges'}), 403
+        
+        # Update admin status
+        cursor.execute('UPDATE members SET is_admin = ? WHERE member_number = ?', (new_admin_status, member_number))
+        
+        # Update all active sessions for this member
+        new_role = 'admin' if new_admin_status == 1 else 'member'
+        cursor.execute('UPDATE sessions SET role = ? WHERE email = ?', (new_role, member_email))
+        
+        conn.commit()
+        conn.close()
+        
+        action = 'promoted to admin' if new_admin_status == 1 else 'removed from admin'
+        
+        return jsonify({
+            'success': True,
+            'message': f'{member_name} has been {action}',
+            'new_admin_status': new_admin_status,
+            'member_number': member_number
+        })
+        
+    except Exception as e:
+        conn.close()
+        print(f"Toggle admin error: {e}")
+        return jsonify({'error': f'Failed to update admin status: {str(e)}'}), 500
+
 @app.route('/api/member/change-password', methods=['POST'])
 def change_password():
     """Change member password"""

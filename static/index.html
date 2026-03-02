@@ -2048,7 +2048,13 @@ function handleQRDetection(qrData) {
                 const membersData = await membersResponse.json();
                 
                 const tbody = document.getElementById('adminMembersTable');
-                tbody.innerHTML = membersData.members.map(m => `
+                tbody.innerHTML = membersData.members.map(m => {
+                    // Check if current user is klub@middies.co.za
+                    const isSuperAdmin = currentUser && currentUser.email === 'klub@middies.co.za';
+                    const canToggleAdmin = m.is_admin ? isSuperAdmin : true; // Any admin can promote, only super can demote
+                    const isOwnAccount = currentUser && currentUser.email === m.email;
+                    
+                    return `
                     <tr>
                         <td><strong>${m.member_number}</strong></td>
                         <td>${m.first_name} ${m.surname}</td>
@@ -2058,7 +2064,14 @@ function handleQRDetection(qrData) {
                         <td><span class="badge ${m.is_admin ? 'admin' : 'member'}">${m.is_admin ? 'Admin' : 'Member'}</span></td>
                         <td>${m.points}</td>
                         <td>${m.attendance_count || 0}</td>
-                        <td>
+                        <td style="display: flex; gap: 0.5rem;">
+                            ${!isOwnAccount && canToggleAdmin ? `
+                                <button onclick="toggleAdminStatus('${m.member_number}', '${m.first_name} ${m.surname}', ${m.is_admin})" 
+                                        style="background: ${m.is_admin ? '#F59E0B' : '#059669'}; color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
+                                        title="${m.is_admin ? 'Remove admin' : 'Make admin'}">
+                                    ${m.is_admin ? '⬇️ Remove Admin' : '⬆️ Make Admin'}
+                                </button>
+                            ` : ''}
                             <button onclick="deleteMember('${m.member_number}', '${m.first_name} ${m.surname}')" 
                                     style="background: var(--danger); color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
                                     title="Delete member">
@@ -2066,7 +2079,8 @@ function handleQRDetection(qrData) {
                             </button>
                         </td>
                     </tr>
-                `).join('');
+                    `;
+                }).join('');
 
                 // Load attendance
                 const attendanceResponse = await fetch(`${API_BASE}/admin/attendance`, {
@@ -2132,6 +2146,39 @@ function handleQRDetection(qrData) {
             } catch (error) {
                 console.error('Delete error:', error);
                 alert('❌ Failed to delete member: ' + error.message);
+            }
+        }
+
+        async function toggleAdminStatus(memberNumber, memberName, currentlyAdmin) {
+            const action = currentlyAdmin ? 'remove admin privileges from' : 'promote to admin';
+            const confirmation = currentlyAdmin 
+                ? `⚠️ Remove admin privileges from ${memberName}?\n\nOnly klub@middies.co.za can do this.\n\nThey will:\n- Lose access to admin panel\n- Lose scanner access\n- Return to regular member status`
+                : `⬆️ Promote ${memberName} to admin?\n\nThey will gain:\n- Access to admin panel\n- Scanner access\n- Member management abilities`;
+            
+            if (!confirm(confirmation)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/toggle-admin/${memberNumber}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': authToken
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(`✅ ${result.message}`);
+                    // Reload the admin data to refresh the table
+                    await loadAdminData();
+                } else {
+                    alert(`❌ ${result.error || 'Failed to update admin status'}`);
+                }
+            } catch (error) {
+                console.error('Toggle admin error:', error);
+                alert('❌ Failed to update admin status: ' + error.message);
             }
         }
 
@@ -2392,43 +2439,36 @@ function processExcelData(data) {
                         ? `${spousePhoneClean}@middiesklub.temp`
                         : `${spouseName.toLowerCase().replace(/\s+/g, '.')}@middiesklub.temp`;
 
-                // ✅ SKIP if spouse details are identical to primary (member filled in their own details)
-                const isSameAsPrimary = 
-                    (spouseEmailFinal === email) || 
-                    (spousePhoneClean && spousePhoneClean === phone.replace(/\D/g, ''));
-
-                if (!isSameAsPrimary) {
-                    // Spouse photo
-                    let spousePhotoUrl = row['Upload profile picture of spouse'] || '';
-                    if (spousePhotoUrl && spousePhotoUrl.includes('drive.google.com')) {
-                        const m = spousePhotoUrl.match(/[-\w]{25,}/);
-                        if (m) spousePhotoUrl = `https://drive.google.com/uc?export=view&id=${m[0]}`;
-                    }
-                    if (!spousePhotoUrl) {
-                        const sp = spouseName.split(' ');
-                        spousePhotoUrl = `https://ui-avatars.com/api/?name=${sp[0]}+${sp.slice(1).join('+')||''}&background=1a472a&color=FFC107&size=200&bold=true`;
-                    }
-
-                    const spouseNameParts = spouseName.split(' ');
-                    const spouseFirst = spouseNameParts[0] || '';
-                    const spouseSur   = spouseNameParts.slice(1).join(' ') || '';
-
-                    // Add spouse as a full member entry (gets their own login)
-                    results.push({
-                        first_name: spouseFirst,
-                        surname: spouseSur,
-                        email: spouseEmailFinal,
-                        phone: spousePhoneClean,
-                        membership_type: membershipType,
-                        expiry_date: expiryDateString,
-                        status: 'active',
-                        photo_url: spousePhotoUrl,
-                        is_admin: 'No',
-                        family_members: []
-                    });
+                // Spouse photo
+                let spousePhotoUrl = row['Upload profile picture of spouse'] || '';
+                if (spousePhotoUrl && spousePhotoUrl.includes('drive.google.com')) {
+                    const m = spousePhotoUrl.match(/[-\w]{25,}/);
+                    if (m) spousePhotoUrl = `https://drive.google.com/uc?export=view&id=${m[0]}`;
+                }
+                if (!spousePhotoUrl) {
+                    const sp = spouseName.split(' ');
+                    spousePhotoUrl = `https://ui-avatars.com/api/?name=${sp[0]}+${sp.slice(1).join('+')||''}&background=1a472a&color=FFC107&size=200&bold=true`;
                 }
 
-                // Always track on primary member's card
+                const spouseNameParts = spouseName.split(' ');
+                const spouseFirst = spouseNameParts[0] || '';
+                const spouseSur   = spouseNameParts.slice(1).join(' ') || '';
+
+                // Add spouse as a full member entry (gets their own login)
+                results.push({
+                    first_name: spouseFirst,
+                    surname: spouseSur,
+                    email: spouseEmailFinal,
+                    phone: spousePhoneClean,
+                    membership_type: membershipType,
+                    expiry_date: expiryDateString,
+                    status: 'active',
+                    photo_url: spousePhotoUrl,
+                    is_admin: 'No',
+                    family_members: []
+                });
+
+                // Also track on primary member's card
                 familyMembers.push({ name: spouseName, relationship: 'Spouse' });
             }
         }
