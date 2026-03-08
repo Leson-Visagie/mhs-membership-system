@@ -1517,75 +1517,53 @@ function displayMemberCard(member, familyMembers) {
 
     container.innerHTML = html;
 
-    // Generate main QR Code - WITH SPECIAL CHARACTER HANDLING
+    // Generate main QR Code - USE EMAIL (unique identifier)
     try {
-        // Use just "Firstname Surname" format - normalize special characters
-        const normalizedName = normalizeName(`${member.first_name} ${member.surname}`);
-        const qrData = normalizedName;
+        const qrData = member.email; // Use email as unique identifier
         
-        console.log(`QR Code data: "${qrData}" (${qrData.length} characters)`);
-        console.log(`Original: "${member.first_name} ${member.surname}"`);
+        console.log(`QR Code data: "${qrData}"`);
         
-        if (qrData.length > 200) {
-            console.warn(`QR data too long (${qrData.length} > 200), using fallback`);
-            document.getElementById('memberQR').innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 24px; margin-bottom: 10px;">👤</div>
-                    <strong>${member.first_name} ${member.surname}</strong>
-                    <div style="font-size: 12px; color: #666; margin-top: 5px;">Member Name</div>
-                </div>
-            `;
-        } else {
-            new QRCode(document.getElementById('memberQR'), {
-                text: qrData,
-                width: 200,
-                height: 200,
-                colorDark: "#1a472a",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.L // Use lower correction level for more capacity
-            });
-        }
+        new QRCode(document.getElementById('memberQR'), {
+            text: qrData,
+            width: 200,
+            height: 200,
+            colorDark: "#1a472a",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+        });
     } catch (error) {
         console.error("QR code generation error:", error);
         document.getElementById('memberQR').innerHTML = `
             <div style="text-align: center; padding: 20px; background: white; border-radius: 8px;">
                 <strong>${member.first_name} ${member.surname}</strong>
-                <div style="font-size: 12px; color: #666;">Member Name</div>
+                <div style="font-size: 12px; color: #666;">QR Error - Use manual entry</div>
             </div>
         `;
     }
 
-    // Generate family member QR codes - WITH SPECIAL CHARACTER HANDLING
+    // Generate family member QR codes - USE THEIR EMAIL TOO
     if (familyMembers && familyMembers.length > 0) {
         familyMembers.forEach((fm, index) => {
             try {
-                // For family members, normalize the name
-                const normalizedFamilyName = normalizeName(fm.name);
+                // Family members should have their email too, fallback to primary member's email + suffix
+                const familyQrData = fm.email || `${member.email}+family${index}`;
                 
-                console.log(`Family QR ${index}: Original: "${fm.name}", Normalized: "${normalizedFamilyName}" (${normalizedFamilyName.length} chars)`);
+                console.log(`Family QR ${index}: "${familyQrData}"`);
                 
-                if (normalizedFamilyName.length > 200) {
-                    console.warn(`Family QR data too long, using fallback for ${fm.name}`);
-                    document.getElementById(`familyQR${index}`).innerHTML = `
-                        <div style="text-align: center; padding: 10px; background: white; border-radius: 4px;">
-                            <strong>${fm.name}</strong>
-                        </div>
-                    `;
-                } else {
-                    new QRCode(document.getElementById(`familyQR${index}`), {
-                        text: normalizedFamilyName,
-                        width: 150,
-                        height: 150,
-                        colorDark: "#1a472a",
-                        colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.L // Lower correction for more capacity
-                    });
-                }
+                new QRCode(document.getElementById(`familyQR${index}`), {
+                    text: familyQrData,
+                    width: 150,
+                    height: 150,
+                    colorDark: "#1a472a",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
             } catch (error) {
                 console.error(`Error generating QR for family member ${fm.name}:`, error);
                 document.getElementById(`familyQR${index}`).innerHTML = `
                     <div style="text-align: center; padding: 10px; background: white; border-radius: 4px;">
                         <strong>${fm.name}</strong>
+                        <div style="font-size: 10px; color: #666;">QR Error</div>
                     </div>
                 `;
             }
@@ -1773,14 +1751,9 @@ function normalizeName(name) {
 
         
 function handleQRDetection(qrData) {
-    try {
-        // Try to parse as JSON (for backward compatibility)
-        const data = JSON.parse(qrData);
-        showConfirmationModal(data);
-    } catch (error) {
-        // If not JSON, it's probably just a name or member number
-        showConfirmationModal({ member_data: qrData.trim() });
-    }
+    // QR code now contains just the email address (plain text)
+    const email = qrData.trim();
+    showConfirmationModal({ email: email });
 }
 
         function showConfirmationModal(qrData) {
@@ -1804,7 +1777,7 @@ function handleQRDetection(qrData) {
                             <div id="scanInfo" style="display: none;">
                                 <div style="text-align: center; margin-bottom: 1.5rem;">
                                     <h3 id="scanMemberName" style="color: var(--primary); margin-bottom: 0.5rem;"></h3>
-                                    <p><strong>Member #:</strong> <span id="scanMemberNumber"></span></p>
+                                    <p><strong>Email:</strong> <span id="scanMemberEmail"></span></p>
                                     <p><strong>Status:</strong> <span id="scanStatus"></span></p>
                                     <p><strong>Event:</strong> <span id="scanEventName"></span></p>
                                     <p><strong>Time:</strong> <span id="scanTime"></span></p>
@@ -1831,19 +1804,19 @@ function handleQRDetection(qrData) {
             const eventName = document.getElementById('eventName').value || 'General Access';
             document.getElementById('scanEventName').textContent = eventName;
             document.getElementById('scanTime').textContent = new Date().toLocaleTimeString();
-            document.getElementById('scanMemberNumber').textContent = qrData.member_number;
+            document.getElementById('scanMemberEmail').textContent = qrData.email;
             
             // Show loading, hide info
             document.getElementById('scanLoading').style.display = 'block';
             document.getElementById('scanInfo').style.display = 'none';
             
-            // Fetch member info
-            fetchMemberInfo(qrData.member_number);
+            // Fetch member info by email
+            fetchMemberInfoByEmail(qrData.email);
         }
 
-        async function fetchMemberInfo(memberData) {
+        async function fetchMemberInfoByEmail(email) {
     try {
-        const response = await fetch(`${API_BASE}/member-info/${encodeURIComponent(memberData)}`, {
+        const response = await fetch(`${API_BASE}/member-info-by-email/${encodeURIComponent(email)}`, {
             headers: { 'Authorization': authToken }
         });
         
@@ -1855,7 +1828,9 @@ function handleQRDetection(qrData) {
         
         if (data.found) {
             document.getElementById('scanMemberName').textContent = data.member_name;
-            document.getElementById('scanMemberNumber').textContent = data.member_number || 'N/A';
+            document.getElementById('scanMemberEmail').textContent = data.email;
+            // Store email for confirmScan
+            document.getElementById('scanMemberEmail').setAttribute('data-email', data.email);
             document.getElementById('scanStatus').innerHTML = data.is_active ? 
                 '<span style="color: var(--success); font-weight: 600;">✅ ACTIVE</span>' :
                 '<span style="color: var(--danger); font-weight: 600;">❌ INACTIVE</span>';
@@ -1868,7 +1843,7 @@ function handleQRDetection(qrData) {
             }
         } else {
             document.getElementById('scanMemberName').textContent = 'Member Not Found';
-            document.getElementById('scanMemberNumber').textContent = memberData;
+            document.getElementById('scanMemberEmail').textContent = email;
             document.getElementById('scanStatus').innerHTML = '<span style="color: var(--danger); font-weight: 600;">❌ NOT FOUND</span>';
         }
         
@@ -1888,7 +1863,8 @@ function handleQRDetection(qrData) {
 
         async function confirmScan() {
             const modal = document.getElementById('scanConfirmModal');
-            const memberNumber = document.getElementById('scanMemberNumber').textContent;
+            const email = document.getElementById('scanMemberEmail').getAttribute('data-email') || 
+                          document.getElementById('scanMemberEmail').textContent;
             const eventName = document.getElementById('eventName').value || 'General Access';
             
             // Disable confirm button and show processing
@@ -1897,14 +1873,14 @@ function handleQRDetection(qrData) {
             confirmBtn.innerHTML = 'Processing...';
             
             try {
-                const response = await fetch(`${API_BASE}/scan`, {
+                const response = await fetch(`${API_BASE}/scan-by-email`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': authToken
                     },
                     body: JSON.stringify({
-                        member_number: memberNumber,
+                        email: email,
                         event_name: eventName
                     })
                 });

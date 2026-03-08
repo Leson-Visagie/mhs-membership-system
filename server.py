@@ -880,6 +880,128 @@ def get_member_info(member_number):
     finally:
         conn.close()
 
+@app.route('/api/member-info-by-email/<email>', methods=['GET'])
+def get_member_info_by_email(email):
+    """Get member info by email for confirmation display"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Look up member by email
+        cursor.execute('''
+            SELECT m.*, m.first_name || " " || m.surname as member_name
+            FROM members m
+            WHERE m.email = ?
+        ''', (email.lower(),))
+        
+        member = cursor.fetchone()
+        
+        if member:
+            is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
+            
+            return jsonify({
+                'found': True,
+                'email': member['email'],
+                'member_number': member['member_number'],
+                'member_name': member['member_name'],
+                'is_active': is_active,
+                'expiry_date': member['expiry_date'],
+                'status': member['status'],
+                'membership_type': member['membership_type']
+            })
+        else:
+            return jsonify({
+                'found': False,
+                'email': email,
+                'message': 'Member not found'
+            })
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/scan-by-email', methods=['POST'])
+def scan_by_email():
+    """Scan by email and record attendance (Admin only)"""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+    
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+    
+    data = request.json
+    email = data.get('email', '').strip().lower()
+    event_name = data.get('event_name', 'General Access')
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Look up member by email
+        cursor.execute('''
+            SELECT m.*, m.first_name || ' ' || m.surname as full_name
+            FROM members m
+            WHERE m.email = ?
+        ''', (email,))
+        
+        member = cursor.fetchone()
+        
+        if not member:
+            conn.close()
+            return jsonify({
+                'success': False,
+                'status': 'error',
+                'message': 'Member not found'
+            }), 404
+        
+        member_name = member['full_name']
+        member_number = member['member_number']
+        
+        is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
+        points_awarded = 10 if is_active else 0
+        
+        cursor.execute('''
+            INSERT INTO attendance 
+            (member_number, member_name, event_name, scanned_by, timestamp, points_awarded, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            member_number,
+            member_name,
+            event_name,
+            user['email'],
+            datetime.now().isoformat(),
+            points_awarded,
+            'granted' if is_active else 'denied'
+        ))
+        
+        if is_active:
+            cursor.execute('''
+                UPDATE members 
+                SET points = points + ? 
+                WHERE email = ?
+            ''', (points_awarded, email))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'status': 'granted' if is_active else 'denied',
+            'member_name': member_name,
+            'points_awarded': points_awarded,
+            'message': 'Access Granted' if is_active else 'Membership Expired'
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': 'Scan failed'}), 500
+
 @app.route('/api/scan-qr', methods=['POST'])
 def scan_qr():
     """Scan QR code and record attendance (Admin only)"""
