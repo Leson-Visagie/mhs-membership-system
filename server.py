@@ -4,6 +4,9 @@ Flask + SQLite Database
 Configured for production deployment
 """
 
+# ⚡ INCREMENT THIS whenever you deploy — check /health to confirm which version is live
+BUILD_VERSION = "2.3.0"
+
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import sqlite3
@@ -360,8 +363,12 @@ def index():
 
 @app.route('/health')
 def health():
-    """Health check endpoint for monitoring"""
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+    """Health check endpoint — also shows deployed version"""
+    return jsonify({
+        'status': 'healthy',
+        'version': BUILD_VERSION,
+        'timestamp': datetime.now().isoformat()
+    })
 
 @app.route('/api/upload-profile-photo', methods=['POST'])
 def upload_profile_photo():
@@ -530,13 +537,61 @@ def import_excel():
                 # Handle family member info from Google Forms
                 family_members = []
                 spouse_info = member_data.get('If family Package - Details of spouse\nName and surname ', '')
-                if spouse_info and 'family' in membership_type.lower():
-                    # Parse spouse info (format: "Name\nID\nPhone\nEmail")
-                    spouse_parts = spouse_info.split('\n')
-                    if len(spouse_parts) >= 1:
+                spouse_contact_col = member_data.get('Contact details of spouse:', '') or member_data.get('Contact details of spouse', '')
+                spouse_email_col = member_data.get('Email of spouse:', '') or member_data.get('Email of spouse', '')
+
+                if 'family' in membership_type.lower():
+                    spouse_name = ''
+                    spouse_phone = ''
+                    spouse_email_val = ''
+
+                    if spouse_info and spouse_info.strip().lower() not in ['', 'no package', 'n/a']:
+                        # Format A: "Name\nID\nPhone\nEmail" (all in one cell)
+                        spouse_parts = [p.strip() for p in spouse_info.split('\n') if p.strip()]
+                        if spouse_parts:
+                            spouse_name = spouse_parts[0]
+                        # Find phone: 10-digit number in parts
+                        for part in spouse_parts[1:]:
+                            digits = ''.join(c for c in str(part) if c.isdigit())
+                            if 9 <= len(digits) <= 10:
+                                if len(digits) == 9:
+                                    spouse_phone = '0' + digits
+                                else:
+                                    spouse_phone = digits
+                            elif '@' in str(part):
+                                spouse_email_val = part.strip().lower()
+
+                        # Format B: name only in col13, phone in col19, email in col20
+                        if not spouse_phone and spouse_contact_col:
+                            raw = str(spouse_contact_col)
+                            digits = ''.join(c for c in raw if c.isdigit())
+                            if len(digits) == 9:
+                                spouse_phone = '0' + digits
+                            elif len(digits) == 10:
+                                spouse_phone = digits
+                        if not spouse_email_val and spouse_email_col:
+                            spouse_email_val = str(spouse_email_col).strip().lower()
+
+                    elif spouse_contact_col:
+                        # No col13 name but col19 has contact — still create spouse
+                        raw = str(spouse_contact_col)
+                        digits = ''.join(c for c in raw if c.isdigit())
+                        if len(digits) == 9:
+                            spouse_phone = '0' + digits
+                        elif len(digits) == 10:
+                            spouse_phone = digits
+                        if spouse_email_col:
+                            spouse_email_val = str(spouse_email_col).strip().lower()
+
+                    if spouse_name or spouse_phone:
                         family_members.append({
-                            'name': spouse_parts[0].strip(),
-                            'relationship': 'Spouse'
+                            'name': spouse_name or 'Spouse',
+                            'relationship': 'Spouse',
+                            'phone': spouse_phone,
+                            'email': spouse_email_val,
+                            'create_account': True,   # flag to create a members row
+                            'expiry_date': member_data.get('expiry_date', '2027-12-31'),
+                            'membership_type': membership_type,
                         })
             else:
                 # Standard JSON format
@@ -663,33 +718,93 @@ def import_excel():
             ))
             
             member_id = cursor.lastrowid
-            
-            # Handle family members
+
+            # Handle family members / spouses
             family_counter = 1
-            
+
             for fam in family_members:
                 try:
-                    # Check if family member already exists
                     fam_name = fam.get('name', '').strip()
                     if not fam_name:
                         continue
-                    
-                    # Check if this family member already exists for this primary
-                    cursor.execute('''
-                        SELECT id FROM family_members 
-                        WHERE primary_member_id = ? AND LOWER(name) = LOWER(?)
-                    ''', (member_id, fam_name))
-                    
-                    if cursor.fetchone():
-                        errors.append(f"Family member '{fam_name}' already exists for {member_number}")
-                        continue
-                    
-                    # Generate unique family member number
+
+                    fam_phone = normalize_phone_number(fam.get('phone', ''))
+                    fam_email = fam.get('email', '').strip().lower()
+                    create_account = fam.get('create_account', False)
+
+                    # Generate a family member number (e.g. M1005-F1)
                     family_member_number = f"{member_number}-F{family_counter}"
                     family_counter += 1
-                    
+
+                    # --- Create a full members account so the spouse can log in ---
+                    if create_account and (fam_phone or fam_email):
+                        # Split name into first + surname
+                        fam_parts = fam_name.split()
+                        fam_first = ' '.join(fam_parts[:-1]) if len(fam_parts) > 1 else fam_parts[0]
+                        fam_surname = fam_parts[-1] if len(fam_parts) > 1 else fam_parts[0]
+
+                        # Build a fallback email if none provided
+                        if not fam_email:
+                            fam_slug = fam_name.lower().replace(' ', '.')
+                            fam_email = f"{fam_slug}.{next_number}@middiesklub.temp"
+
+                        # Default password = phone, fallback to email prefix
+                        fam_password = fam_phone if fam_phone else fam_email.split('@')[0]
+                        fam_hash = hash_password(fam_password)
+
+                        fam_photo = f"https://ui-avatars.com/api/?name={fam_first}+{fam_surname}&background=1a472a&color=FFC107"
+                        fam_expiry = fam.get('expiry_date', '2027-12-31')
+                        fam_mtype = fam.get('membership_type', membership_type)
+
+                        # Check if spouse account already exists by phone or email
+                        spouse_exists = False
+                        if fam_phone:
+                            cursor.execute(
+                                "SELECT member_number FROM members WHERE phone = ?", (fam_phone,)
+                            )
+                            if cursor.fetchone():
+                                spouse_exists = True
+                                errors.append(f"Spouse {fam_name} ({fam_phone}) already has an account — skipped duplicate")
+                        if not spouse_exists and fam_email and '@middiesklub.temp' not in fam_email:
+                            cursor.execute(
+                                "SELECT member_number FROM members WHERE LOWER(email) = ?", (fam_email,)
+                            )
+                            if cursor.fetchone():
+                                spouse_exists = True
+                                errors.append(f"Spouse {fam_name} ({fam_email}) already has an account — skipped duplicate")
+
+                        if not spouse_exists:
+                            cursor.execute('''
+                                INSERT INTO members
+                                (member_number, first_name, surname, email, phone, password_hash,
+                                 membership_type, expiry_date, status, photo_url, points, is_admin)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, 0, 0)
+                            ''', (
+                                family_member_number,
+                                fam_first,
+                                fam_surname,
+                                fam_email,
+                                fam_phone,
+                                fam_hash,
+                                fam_mtype,
+                                fam_expiry,
+                                fam_photo,
+                            ))
+                            next_number += 1
+                            imported += 1
+
+                    # Always also add to family_members table for QR/attendance linking
                     cursor.execute('''
-                        INSERT INTO family_members 
+                        SELECT id FROM family_members
+                        WHERE primary_member_id = ? AND LOWER(name) = LOWER(?)
+                    ''', (member_id, fam_name))
+
+                    if cursor.fetchone():
+                        errors.append(f"Family member '{fam_name}' already linked to {member_number}")
+                        continue
+
+                    cursor.execute('''
+                        INSERT INTO family_members
                         (primary_member_id, member_number, name, relationship)
                         VALUES (?, ?, ?, ?)
                     ''', (
@@ -698,6 +813,7 @@ def import_excel():
                         fam_name,
                         fam.get('relationship', 'Family')
                     ))
+
                 except Exception as e:
                     errors.append(f"Family member error for {member_number}: {str(e)}")
             
