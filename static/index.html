@@ -2017,10 +2017,13 @@ function handleQRDetection(qrData) {
                 
                 const tbody = document.getElementById('adminMembersTable');
                 tbody.innerHTML = membersData.members.map(m => {
-                    // Check if current user is klub@middies.co.za
                     const isSuperAdmin = currentUser && currentUser.email === 'klub@middies.co.za';
-                    const canToggleAdmin = m.is_admin ? isSuperAdmin : true; // Any admin can promote, only super can demote
+                    // Any admin can promote; only super admin can demote
+                    const canToggleAdmin = m.is_admin ? isSuperAdmin : true;
                     const isOwnAccount = currentUser && currentUser.email === m.email;
+                    // Escape names to prevent apostrophes (O'Grady etc) breaking onclick HTML
+                    const safeMemberNumber = m.member_number;
+                    const safeName = (m.first_name + ' ' + m.surname).replace(/'/g, "\\'");
                     
                     return `
                     <tr>
@@ -2032,16 +2035,16 @@ function handleQRDetection(qrData) {
                         <td><span class="badge ${m.is_admin ? 'admin' : 'member'}">${m.is_admin ? 'Admin' : 'Member'}</span></td>
                         <td>${m.points}</td>
                         <td>${m.attendance_count || 0}</td>
-                        <td style="display: flex; gap: 0.5rem;">
+                        <td style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             ${!isOwnAccount && canToggleAdmin ? `
-                                <button onclick="toggleAdminStatus('${m.member_number}', '${m.first_name} ${m.surname}', ${m.is_admin})" 
+                                <button onclick="toggleAdminStatus('${safeMemberNumber}', '${safeName}', ${m.is_admin ? 1 : 0})" 
                                         style="background: ${m.is_admin ? '#F59E0B' : '#059669'}; color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
                                         title="${m.is_admin ? 'Remove admin' : 'Make admin'}">
                                     ${m.is_admin ? '⬇️ Remove Admin' : '⬆️ Make Admin'}
                                 </button>
                             ` : ''}
                             ${!isOwnAccount ? `
-                                <button onclick="deleteMember('${m.member_number}', '${m.first_name} ${m.surname}')" 
+                                <button onclick="deleteMember('${safeMemberNumber}', '${safeName}')" 
                                         style="background: var(--danger); color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
                                         title="Delete member">
                                     🗑️ Delete
