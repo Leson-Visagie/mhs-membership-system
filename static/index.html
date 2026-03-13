@@ -2023,12 +2023,15 @@ function handleQRDetection(qrData) {
                     const isOwnAccount = currentUser && currentUser.email === m.email;
                     // Escape names to prevent apostrophes (O'Grady etc) breaking onclick HTML
                     const safeMemberNumber = m.member_number;
-                    const safeName = (m.first_name + ' ' + m.surname).replace(/'/g, "\\'");
+                    const cleanFirst = (m.first_name || '').replace(/[\n\r\t]/g, ' ').trim();
+                    const cleanSurname = (m.surname || '').replace(/[\n\r\t]/g, ' ').trim();
+                    const displayName = cleanFirst + ' ' + cleanSurname;
+                    const safeName = displayName.replace(/'/g, "\\'");
                     
                     return `
                     <tr>
                         <td><strong>${m.member_number}</strong></td>
-                        <td>${m.first_name} ${m.surname}</td>
+                        <td>${displayName}</td>
                         <td>${m.email}</td>
                         <td>${m.membership_type}</td>
                         <td><span class="badge ${m.status}">${m.status}</span></td>
