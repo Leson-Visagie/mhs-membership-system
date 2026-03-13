@@ -938,8 +938,8 @@ body::after {
                 <div id="loginError" class="alert error" style="display: none;"></div>
                 <form onsubmit="handleLogin(event)">
                     <div class="form-group">
-                        <label for="loginEmail">Email or Phone Number</label>
-                        <input type="text" id="loginEmail" placeholder="email@example.com or 0829285154" required>
+                        <label for="loginEmail">Email, Phone Number, or Member Number</label>
+                        <input type="text" id="loginEmail" placeholder="email@example.com, 0829285154, or M1001" required>
                     </div>
                     <div class="form-group">
                         <label for="loginPassword">Password</label>
@@ -953,8 +953,8 @@ body::after {
                     <button type="submit" class="btn btn-primary">Login</button>
                 </form>
                 <p style="text-align: center; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
-                    Login with your email or phone number (0829285154)<br>
-                    <small>Default password is your phone number or email</small>
+                    Login with email, phone (0829285154), or member number (M1001)<br>
+                    <small>Default password is your phone number or email username</small>
                 </p>
             </div>
         </div>
@@ -1190,22 +1190,24 @@ body::after {
         async function handleLogin(event) {
             event.preventDefault();
             
-            let emailOrPhone = document.getElementById('loginEmail').value.trim();
+            let identifier = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
             
-            // Check if it's a phone number (only digits and starts with 0)
-            const isPhone = /^0\d{9}$/.test(emailOrPhone);
+            // Normalize phone numbers by removing spaces and dashes
+            const cleanedIdentifier = identifier.replace(/[\s\-\(\)]/g, '');
             
-            if (isPhone) {
-                // Validate phone format: must be exactly 10 digits starting with 0
-                if (emailOrPhone.length !== 10) {
-                    document.getElementById('loginError').textContent = 'Phone number must be 10 digits (e.g., 0829285154)';
-                    document.getElementById('loginError').style.display = 'block';
-                    return;
-                }
+            // Check if it's a member number (starts with M)
+            const isMemberNumber = /^M\d+$/i.test(cleanedIdentifier);
+            
+            // Check if it's a phone number (10 digits starting with 0)
+            const isPhone = /^0\d{9}$/.test(cleanedIdentifier);
+            
+            // Use cleaned identifier if it's phone or member number
+            if (isPhone || isMemberNumber) {
+                identifier = cleanedIdentifier;
             } else {
                 // It's an email, convert to lowercase
-                emailOrPhone = emailOrPhone.toLowerCase();
+                identifier = identifier.toLowerCase();
             }
             
             try {
@@ -1213,7 +1215,7 @@ body::after {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        email: emailOrPhone,
+                        email: identifier,
                         password: password 
                     })
                 });
@@ -1228,7 +1230,7 @@ body::after {
                     
                     await loadUserData();
                 } else {
-                    document.getElementById('loginError').textContent = data.error || 'Login failed';
+                    document.getElementById('loginError').textContent = data.error || 'Invalid credentials. Check your email/phone/member number and password.';
                     document.getElementById('loginError').style.display = 'block';
                 }
             } catch (error) {

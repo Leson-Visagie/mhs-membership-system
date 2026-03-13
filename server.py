@@ -327,10 +327,66 @@ def import_excel():
     
     for idx, member_data in enumerate(data):
         try:
-            email = member_data.get('email', '').strip().lower()
-            phone = member_data.get('phone', '').strip()
-            first_name = member_data.get('first_name', '').strip()
-            surname = member_data.get('surname', '').strip()
+            # Handle both formats: direct JSON and Google Forms format
+            # Google Forms format uses different column names
+            if 'Name & Surname' in member_data or 'Email Adress' in member_data:
+                # Google Forms format
+                full_name_raw = member_data.get('Name & Surname', '').strip()
+                email = member_data.get('Email Adress', member_data.get('Email Address', '')).strip().lower()
+                phone = str(member_data.get('Contact Number', '')).strip()
+                membership_type = member_data.get('Membership Type', 'Annual Membership(solo person) R500')
+                
+                # Parse full name into first and surname
+                name_parts = full_name_raw.split()
+                if len(name_parts) >= 2:
+                    first_name = ' '.join(name_parts[:-1])  # Everything except last word
+                    surname = name_parts[-1]  # Last word
+                elif len(name_parts) == 1:
+                    first_name = name_parts[0]
+                    surname = name_parts[0]
+                else:
+                    errors.append(f"Row {idx + 1}: Missing name")
+                    continue
+                
+                # Clean phone number - remove spaces and convert to string
+                if phone:
+                    # Handle scientific notation from Excel
+                    try:
+                        if isinstance(phone, float) or '.' in str(phone):
+                            phone = str(int(float(phone)))
+                        phone = str(phone).replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+                        # Ensure it starts with 0
+                        if len(phone) == 9 and not phone.startswith('0'):
+                            phone = '0' + phone
+                        elif len(phone) == 10 and phone.startswith('0'):
+                            pass  # Already correct
+                        else:
+                            # Try to extract 10 digits
+                            digits_only = ''.join(c for c in phone if c.isdigit())
+                            if len(digits_only) >= 10:
+                                phone = digits_only[-10:]  # Take last 10 digits
+                    except:
+                        pass
+                
+                # Handle family member info from Google Forms
+                family_members = []
+                spouse_info = member_data.get('If family Package - Details of spouse\nName and surname ', '')
+                if spouse_info and 'family' in membership_type.lower():
+                    # Parse spouse info (format: "Name\nID\nPhone\nEmail")
+                    spouse_parts = spouse_info.split('\n')
+                    if len(spouse_parts) >= 1:
+                        family_members.append({
+                            'name': spouse_parts[0].strip(),
+                            'relationship': 'Spouse'
+                        })
+            else:
+                # Standard JSON format
+                email = member_data.get('email', '').strip().lower()
+                phone = member_data.get('phone', '').strip()
+                first_name = member_data.get('first_name', '').strip()
+                surname = member_data.get('surname', '').strip()
+                membership_type = member_data.get('membership_type', 'Solo')
+                family_members = member_data.get('family_members', [])
             
             if not email:
                 errors.append(f"Row {idx + 1}: Missing email")
@@ -342,8 +398,11 @@ def import_excel():
             
             full_name = f"{first_name} {surname}"
             
+            # Normalize phone for comparison
+            normalized_phone = phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '') if phone else ''
+            
             # Check if member already exists by email
-            cursor.execute('SELECT member_number, first_name, surname FROM members WHERE email = ?', (email,))
+            cursor.execute('SELECT member_number, first_name, surname FROM members WHERE LOWER(email) = ?', (email,))
             existing_by_email = cursor.fetchone()
             
             if existing_by_email:
@@ -362,10 +421,13 @@ def import_excel():
                     email = new_email
                     errors.append(f"Row {idx + 1}: Original email in use, using {new_email} instead")
             
-            # Also check by phone if provided
-            existing_member_number = None
-            if phone:
-                cursor.execute('SELECT member_number, first_name, surname FROM members WHERE phone = ?', (phone,))
+            # Also check by phone if provided (using normalized comparison)
+            if normalized_phone and len(normalized_phone) >= 10:
+                cursor.execute('''
+                    SELECT member_number, first_name, surname 
+                    FROM members 
+                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ?
+                ''', (normalized_phone,))
                 existing_by_phone = cursor.fetchone()
                 
                 if existing_by_phone:
@@ -373,7 +435,7 @@ def import_excel():
                     
                     if existing_name.lower() == full_name.lower():
                         # Same person, different email - update email
-                        cursor.execute('UPDATE members SET email = ? WHERE phone = ?', (email, phone))
+                        cursor.execute('UPDATE members SET email = ? WHERE member_number = ?', (email, existing_by_phone[0]))
                         updated += 1
                         errors.append(f"Updated {existing_by_phone[0]} - updated email to {email}")
                         conn.commit()
@@ -412,8 +474,9 @@ def import_excel():
             next_number += 1
             
             # Set default password: use phone if available, otherwise use email
-            if phone and len(phone) >= 10 and phone[0].isdigit():
-                default_password = phone[-10:] if len(phone) > 10 else phone
+            if phone and len(normalized_phone) >= 10:
+                # Use normalized phone as password (10 digits)
+                default_password = normalized_phone[-10:] if len(normalized_phone) > 10 else normalized_phone
             else:
                 default_password = email.split('@')[0]  # Use username part of email
             
@@ -433,8 +496,8 @@ def import_excel():
                 email,
                 phone,
                 password_hash,
-                member_data.get('membership_type', 'Solo'),
-                member_data.get('expiry_date', ''),
+                membership_type,
+                member_data.get('expiry_date', '2027-12-31'),
                 member_data.get('status', 'active'),
                 member_data.get('photo_url', f'https://ui-avatars.com/api/?name={first_name}+{surname}&background=1a472a&color=FFC107'),
                 is_admin
@@ -443,7 +506,6 @@ def import_excel():
             member_id = cursor.lastrowid
             
             # Handle family members
-            family_members = member_data.get('family_members', [])
             family_counter = 1
             
             for fam in family_members:
@@ -504,13 +566,13 @@ def import_excel():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    """Login endpoint - supports email or phone number"""
+    """Login endpoint - supports email, phone number, or member number"""
     data = request.json
-    email_or_phone = data.get('email', '').strip()
+    identifier = data.get('email', '').strip()
     password = data.get('password', '').strip()
     
-    if not email_or_phone or not password:
-        return jsonify({'error': 'Email/phone and password required'}), 400
+    if not identifier or not password:
+        return jsonify({'error': 'Email/phone/member number and password required'}), 400
     
     conn = get_db()
     cursor = conn.cursor()
@@ -518,26 +580,36 @@ def login():
     try:
         password_hash = hash_password(password)
         
-        # Check if input is a phone number (10 digits starting with 0)
-        is_phone = email_or_phone.isdigit() and len(email_or_phone) == 10 and email_or_phone.startswith('0')
+        # Normalize phone number by removing spaces, dashes, parentheses
+        normalized_identifier = identifier.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
         
-        if is_phone:
-            # Login with phone number
+        # Check if input is a member number (starts with M)
+        if normalized_identifier.upper().startswith('M'):
             cursor.execute('''
                 SELECT member_number, first_name, surname, email, membership_type, 
                        expiry_date, status, photo_url, points, is_admin
                 FROM members 
-                WHERE phone = ? AND password_hash = ?
-            ''', (email_or_phone, password_hash))
+                WHERE UPPER(member_number) = ? AND password_hash = ?
+            ''', (normalized_identifier.upper(), password_hash))
+        # Check if input looks like a phone number (digits only, 10 chars, starts with 0)
+        elif normalized_identifier.isdigit() and len(normalized_identifier) == 10 and normalized_identifier.startswith('0'):
+            # Try phone number - check against normalized phone in database
+            cursor.execute('''
+                SELECT member_number, first_name, surname, email, membership_type, 
+                       expiry_date, status, photo_url, points, is_admin
+                FROM members 
+                WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ? 
+                AND password_hash = ?
+            ''', (normalized_identifier, password_hash))
         else:
-            # Login with email (convert to lowercase)
-            email_or_phone = email_or_phone.lower()
+            # Assume email (convert to lowercase)
+            identifier = identifier.lower()
             cursor.execute('''
                 SELECT member_number, first_name, surname, email, membership_type, 
                        expiry_date, status, photo_url, points, is_admin
                 FROM members 
-                WHERE email = ? AND password_hash = ?
-            ''', (email_or_phone, password_hash))
+                WHERE LOWER(email) = ? AND password_hash = ?
+            ''', (identifier, password_hash))
         
         member = cursor.fetchone()
         
