@@ -1294,27 +1294,72 @@ def scan_by_email():
     cursor = conn.cursor()
     
     try:
-        # Look up member by email
-        cursor.execute('''
-            SELECT m.*, m.first_name || ' ' || m.surname as full_name
-            FROM members m
-            WHERE m.email = ?
-        ''', (email,))
-        
-        member = cursor.fetchone()
-        
-        if not member:
-            conn.close()
-            return jsonify({
-                'success': False,
-                'status': 'error',
-                'message': 'Member not found'
-            }), 404
-        
-        member_name = member['full_name']
-        member_number = member['member_number']
-        
-        is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
+        member = None
+        member_name = None
+        member_number = None
+        is_family_member = False
+
+        # Check if this is a family member fallback QR (primary_email+familyN)
+        if '+family' in email:
+            primary_email = email.split('+family')[0]
+            family_index_str = email.split('+family')[1]
+            try:
+                family_index = int(family_index_str)
+            except ValueError:
+                family_index = 0
+
+            # Find the primary member
+            cursor.execute('''
+                SELECT m.id, m.member_number, m.first_name, m.surname, m.status, m.expiry_date
+                FROM members m
+                WHERE LOWER(m.email) = ?
+            ''', (primary_email,))
+            primary = cursor.fetchone()
+
+            if primary:
+                # Get the family member at this index
+                cursor.execute('''
+                    SELECT fm.name, fm.member_number
+                    FROM family_members fm
+                    WHERE fm.primary_member_id = ?
+                    ORDER BY fm.id
+                    LIMIT 1 OFFSET ?
+                ''', (primary['id'], family_index))
+                fam = cursor.fetchone()
+
+                if fam:
+                    member_name = fam['name']
+                    member_number = fam['member_number']
+                    is_family_member = True
+                    # Use primary member's status/expiry for access check
+                    is_active = primary['status'] == 'active' and datetime.fromisoformat(primary['expiry_date']) > datetime.now()
+                    # Points go to primary member
+                    points_member_number = primary['member_number']
+                    points_email = primary_email
+
+        if not member_name:
+            # Normal email lookup
+            cursor.execute('''
+                SELECT m.*, m.first_name || ' ' || m.surname as full_name
+                FROM members m
+                WHERE LOWER(m.email) = ?
+            ''', (email,))
+            member = cursor.fetchone()
+
+            if not member:
+                conn.close()
+                return jsonify({
+                    'success': False,
+                    'status': 'error',
+                    'message': 'Member not found'
+                }), 404
+
+            member_name = member['full_name']
+            member_number = member['member_number']
+            is_active = member['status'] == 'active' and datetime.fromisoformat(member['expiry_date']) > datetime.now()
+            points_member_number = member_number
+            points_email = email
+
         points_awarded = 10 if is_active else 0
         
         cursor.execute('''
@@ -1335,8 +1380,8 @@ def scan_by_email():
             cursor.execute('''
                 UPDATE members 
                 SET points = points + ? 
-                WHERE email = ?
-            ''', (points_awarded, email))
+                WHERE member_number = ?
+            ''', (points_awarded, points_member_number))
         
         conn.commit()
         conn.close()
@@ -1470,10 +1515,13 @@ def get_all_members():
     
     try:
         cursor.execute('''
-            SELECT member_number, first_name, surname, email, phone, 
-                   membership_type, expiry_date, status, points, is_admin
-            FROM members 
-            ORDER BY created_at DESC
+            SELECT m.member_number, m.first_name, m.surname, m.email, m.phone, 
+                   m.membership_type, m.expiry_date, m.status, m.points, m.is_admin,
+                   COUNT(a.id) as attendance_count
+            FROM members m
+            LEFT JOIN attendance a ON a.member_number = m.member_number
+            GROUP BY m.id
+            ORDER BY m.created_at DESC
         ''')
         
         members = []
