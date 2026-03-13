@@ -2040,11 +2040,13 @@ function handleQRDetection(qrData) {
                                     ${m.is_admin ? '⬇️ Remove Admin' : '⬆️ Make Admin'}
                                 </button>
                             ` : ''}
-                            <button onclick="deleteMember('${m.member_number}', '${m.first_name} ${m.surname}')" 
-                                    style="background: var(--danger); color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
-                                    title="Delete member">
-                                🗑️ Delete
-                            </button>
+                            ${!isOwnAccount ? `
+                                <button onclick="deleteMember('${m.member_number}', '${m.first_name} ${m.surname}')" 
+                                        style="background: var(--danger); color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
+                                        title="Delete member">
+                                    🗑️ Delete
+                                </button>
+                            ` : ''}
                         </td>
                     </tr>
                     `;

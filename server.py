@@ -582,26 +582,33 @@ def login():
         normalized_identifier = identifier.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
         normalized_password = password.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
         identifier_lower = identifier.lower()
+        password_lower = password.lower()
         
         # Build list of all possible password hashes to try
         password_attempts = [
-            hash_password(password),                    # As entered
-            hash_password(normalized_password),          # Normalized
-            hash_password(password.lower()),            # Lowercase
-            hash_password(identifier),                  # Username as password
-            hash_password(normalized_identifier),       # Normalized username
-            hash_password(identifier_lower),            # Lowercase username
-            hash_password(identifier.split('@')[0]),    # Email prefix
-            hash_password(identifier_lower.split('@')[0])  # Lowercase email prefix
+            hash_password(password),                         # As entered
+            hash_password(normalized_password),              # Normalized (no spaces/dashes)
+            hash_password(password_lower),                   # Lowercase
+            hash_password(identifier),                       # Username as password
+            hash_password(normalized_identifier),            # Normalized username as password
+            hash_password(identifier_lower),                 # Lowercase username as password
         ]
+        
+        # Add email prefix attempts if it looks like an email
+        if '@' in identifier:
+            email_prefix = identifier.split('@')[0]
+            password_attempts.extend([
+                hash_password(email_prefix),                 # Email prefix
+                hash_password(email_prefix.lower())          # Lowercase email prefix
+            ])
         
         # Remove duplicates
         password_attempts = list(set(password_attempts))
         
         member = None
         
-        # Try ALL possible combinations until one works
-        # This is intentionally permissive for ease of use
+        # SELECT columns: 0=member_number, 1=first_name, 2=surname, 3=email, 4=membership_type,
+        #                 5=expiry_date, 6=status, 7=photo_url, 8=points, 9=is_admin, 10=phone
         
         # 1. Try as email with all password attempts
         for pwd_hash in password_attempts:
@@ -616,16 +623,18 @@ def login():
                 break
         
         # 2. If not found, try as phone number
-        if not member and normalized_identifier.isdigit() and len(normalized_identifier) >= 10:
-            phone_to_try = normalized_identifier[-10:]  # Last 10 digits
+        if not member and normalized_identifier.isdigit() and len(normalized_identifier) >= 9:
+            # Handle phone numbers - try last 10 digits
+            phone_to_try = normalized_identifier[-10:] if len(normalized_identifier) >= 10 else normalized_identifier
+            
             for pwd_hash in password_attempts:
                 cursor.execute('''
                     SELECT member_number, first_name, surname, email, membership_type, 
                            expiry_date, status, photo_url, points, is_admin, phone
                     FROM members 
-                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ? 
+                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?
                     AND password_hash = ?
-                ''', (phone_to_try, pwd_hash))
+                ''', ('%' + phone_to_try, pwd_hash))
                 member = cursor.fetchone()
                 if member:
                     break
@@ -643,74 +652,89 @@ def login():
                 if member:
                     break
         
-        # 4. LAST RESORT: Try matching identifier to email/phone and password to email/phone
-        # This handles cases where they mix them up
+        # 4. LAST RESORT: Check if user entered phone/email in password field
+        # Try swapping identifier and password
         if not member:
-            # Get all members that match identifier by email OR phone
-            cursor.execute('''
-                SELECT member_number, first_name, surname, email, membership_type, 
-                       expiry_date, status, photo_url, points, is_admin, phone, password_hash
-                FROM members 
-                WHERE LOWER(email) = ? 
-                OR REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ?
-            ''', (identifier_lower, normalized_identifier[-10:] if normalized_identifier.isdigit() and len(normalized_identifier) >= 10 else ''))
+            # Try password as identifier (swap them)
+            swap_password_attempts = [
+                hash_password(identifier),
+                hash_password(normalized_identifier),
+                hash_password(identifier_lower)
+            ]
+            if '@' in identifier:
+                swap_password_attempts.append(hash_password(identifier.split('@')[0]))
             
-            potential_members = cursor.fetchall()
+            swap_password_attempts = list(set(swap_password_attempts))
             
-            for pot_member in potential_members:
-                stored_email = pot_member[3].lower()
-                stored_phone = pot_member[10]
-                stored_password_hash = pot_member[11]
-                
-                # Normalize stored phone
-                if stored_phone:
-                    stored_phone_normalized = stored_phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-                else:
-                    stored_phone_normalized = ''
-                
-                email_prefix = stored_email.split('@')[0]
-                
-                # Try: password = email, email prefix, or phone
-                if stored_password_hash in [
-                    hash_password(stored_email),
-                    hash_password(email_prefix),
-                    hash_password(stored_phone_normalized) if stored_phone_normalized else None,
-                    hash_password(password),
-                    hash_password(normalized_password),
-                    hash_password(password.lower())
-                ]:
-                    member = pot_member
+            # Try password as email
+            for pwd_hash in swap_password_attempts:
+                cursor.execute('''
+                    SELECT member_number, first_name, surname, email, membership_type, 
+                           expiry_date, status, photo_url, points, is_admin, phone
+                    FROM members 
+                    WHERE LOWER(email) = ? AND password_hash = ?
+                ''', (password_lower, pwd_hash))
+                member = cursor.fetchone()
+                if member:
                     break
+            
+            # Try password as phone
+            if not member and normalized_password.isdigit() and len(normalized_password) >= 9:
+                phone_to_try = normalized_password[-10:] if len(normalized_password) >= 10 else normalized_password
+                for pwd_hash in swap_password_attempts:
+                    cursor.execute('''
+                        SELECT member_number, first_name, surname, email, membership_type, 
+                               expiry_date, status, photo_url, points, is_admin, phone
+                        FROM members 
+                        WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?
+                        AND password_hash = ?
+                    ''', ('%' + phone_to_try, pwd_hash))
+                    member = cursor.fetchone()
+                    if member:
+                        break
         
         if not member:
             conn.close()
             return jsonify({'error': 'Invalid credentials'}), 401
         
+        # Extract member data using tuple indices
+        member_number = member[0]
+        first_name = member[1]
+        surname = member[2]
+        email = member[3]
+        membership_type = member[4]
+        expiry_date = member[5]
+        status = member[6]
+        photo_url = member[7]
+        points = member[8]
+        is_admin = member[9]
+        phone = member[10]
+        
         # Check if membership is active
-        if member['status'] != 'active':
+        if status != 'active':
             conn.close()
             return jsonify({'error': 'Account is not active'}), 401
         
-        # Generate session token (use email for session, not phone)
+        # Generate session token
         token = generate_token()
-        role = 'admin' if member['is_admin'] == 1 else 'member'
+        role = 'admin' if is_admin == 1 else 'member'
         expires_at = (datetime.now() + timedelta(days=7)).isoformat()
         
         cursor.execute('''
             INSERT INTO sessions (email, token, role, expires_at)
             VALUES (?, ?, ?, ?)
-        ''', (member['email'], token, role, expires_at))
+        ''', (email, token, role, expires_at))
         
         conn.commit()
         
         # Get family members if applicable
         family_members = []
-        if 'family' in member['membership_type'].lower():
+        if 'family' in membership_type.lower():
             cursor.execute('''
                 SELECT member_number, name, relationship
                 FROM family_members
                 WHERE primary_member_id = (SELECT id FROM members WHERE email = ?)
-            ''', (member['email'],))
+            ''', (email,))
             family_members = [dict(row) for row in cursor.fetchall()]
         
         conn.close()
@@ -720,21 +744,23 @@ def login():
             'token': token,
             'role': role,
             'member': {
-                'member_number': member['member_number'],
-                'first_name': member['first_name'],
-                'surname': member['surname'],
-                'email': member['email'],
-                'membership_type': member['membership_type'],
-                'expiry_date': member['expiry_date'],
-                'status': member['status'],
-                'photo_url': member['photo_url'],
-                'points': member['points'],
+                'member_number': member_number,
+                'first_name': first_name,
+                'surname': surname,
+                'email': email,
+                'membership_type': membership_type,
+                'expiry_date': expiry_date,
+                'status': status,
+                'photo_url': photo_url,
+                'points': points,
                 'family_members': family_members
             }
         })
     except Exception as e:
         conn.close()
         print(f"Login error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Login failed'}), 500
 
 @app.route('/api/logout', methods=['POST'])
