@@ -355,18 +355,32 @@ def import_excel():
                         if isinstance(phone, float) or '.' in str(phone):
                             phone = str(int(float(phone)))
                         phone = str(phone).replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-                        # Ensure it starts with 0
-                        if len(phone) == 9 and not phone.startswith('0'):
-                            phone = '0' + phone
-                        elif len(phone) == 10 and phone.startswith('0'):
-                            pass  # Already correct
+                        
+                        # Get only digits
+                        digits_only = ''.join(c for c in phone if c.isdigit())
+                        
+                        # Normalize to 10 digits starting with 0
+                        if len(digits_only) == 9:
+                            # Add leading 0 (724734553 -> 0724734553)
+                            phone = '0' + digits_only
+                        elif len(digits_only) == 10 and digits_only.startswith('0'):
+                            # Already correct (0724734553)
+                            phone = digits_only
+                        elif len(digits_only) == 10 and not digits_only.startswith('0'):
+                            # Has 10 digits but doesn't start with 0, use last 9 and add 0
+                            phone = '0' + digits_only[-9:]
+                        elif len(digits_only) > 10:
+                            # More than 10 digits, take last 10 or last 9 + add 0
+                            if digits_only[-10:].startswith('0'):
+                                phone = digits_only[-10:]
+                            else:
+                                phone = '0' + digits_only[-9:]
                         else:
-                            # Try to extract 10 digits
-                            digits_only = ''.join(c for c in phone if c.isdigit())
-                            if len(digits_only) >= 10:
-                                phone = digits_only[-10:]  # Take last 10 digits
-                    except:
-                        pass
+                            # Less than 9 digits or other issue
+                            phone = digits_only if digits_only else ''
+                    except Exception as e:
+                        errors.append(f"Row {idx + 1}: Phone parsing error: {e}")
+                        phone = ''
                 
                 # Handle family member info from Google Forms
                 family_members = []
@@ -624,18 +638,29 @@ def login():
         
         # 2. If not found, try as phone number
         if not member and normalized_identifier.isdigit() and len(normalized_identifier) >= 9:
-            # Handle phone numbers - try last 10 digits
-            phone_to_try = normalized_identifier[-10:] if len(normalized_identifier) >= 10 else normalized_identifier
+            # Handle phone numbers - try last 10 digits AND last 9 digits (without leading 0)
+            phones_to_try = []
             
-            for pwd_hash in password_attempts:
-                cursor.execute('''
-                    SELECT member_number, first_name, surname, email, membership_type, 
-                           expiry_date, status, photo_url, points, is_admin, phone
-                    FROM members 
-                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?
-                    AND password_hash = ?
-                ''', ('%' + phone_to_try, pwd_hash))
-                member = cursor.fetchone()
+            if len(normalized_identifier) >= 10:
+                phones_to_try.append(normalized_identifier[-10:])  # Last 10 digits (0724734553)
+            if len(normalized_identifier) >= 9:
+                phones_to_try.append(normalized_identifier[-9:])   # Last 9 digits (724734553)
+            
+            # Remove duplicates
+            phones_to_try = list(set(phones_to_try))
+            
+            for phone_to_try in phones_to_try:
+                for pwd_hash in password_attempts:
+                    cursor.execute('''
+                        SELECT member_number, first_name, surname, email, membership_type, 
+                               expiry_date, status, photo_url, points, is_admin, phone
+                        FROM members 
+                        WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?
+                        AND password_hash = ?
+                    ''', ('%' + phone_to_try, pwd_hash))
+                    member = cursor.fetchone()
+                    if member:
+                        break
                 if member:
                     break
         
@@ -680,16 +705,25 @@ def login():
             
             # Try password as phone
             if not member and normalized_password.isdigit() and len(normalized_password) >= 9:
-                phone_to_try = normalized_password[-10:] if len(normalized_password) >= 10 else normalized_password
-                for pwd_hash in swap_password_attempts:
-                    cursor.execute('''
-                        SELECT member_number, first_name, surname, email, membership_type, 
-                               expiry_date, status, photo_url, points, is_admin, phone
-                        FROM members 
-                        WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?
-                        AND password_hash = ?
-                    ''', ('%' + phone_to_try, pwd_hash))
-                    member = cursor.fetchone()
+                phones_to_try = []
+                if len(normalized_password) >= 10:
+                    phones_to_try.append(normalized_password[-10:])
+                if len(normalized_password) >= 9:
+                    phones_to_try.append(normalized_password[-9:])
+                phones_to_try = list(set(phones_to_try))
+                
+                for phone_to_try in phones_to_try:
+                    for pwd_hash in swap_password_attempts:
+                        cursor.execute('''
+                            SELECT member_number, first_name, surname, email, membership_type, 
+                                   expiry_date, status, photo_url, points, is_admin, phone
+                            FROM members 
+                            WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?
+                            AND password_hash = ?
+                        ''', ('%' + phone_to_try, pwd_hash))
+                        member = cursor.fetchone()
+                        if member:
+                            break
                     if member:
                         break
         
