@@ -358,8 +358,12 @@ def verify_token(token):
 
 @app.route('/')
 def index():
-    """Serve the main HTML file"""
-    return send_from_directory('static', 'index.html')
+    """Serve the main HTML file - always fresh, never cached"""
+    response = send_from_directory('static', 'index.html')
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/health')
 def health():
