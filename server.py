@@ -1643,7 +1643,13 @@ def get_all_members():
         members = []
         for row in cursor.fetchall():
             member = dict(row)
-            
+
+            # Strip newlines from name fields (can sneak in from bad Excel imports
+            # and break HTML table rendering client-side)
+            for field in ('first_name', 'surname', 'email', 'phone', 'membership_type'):
+                if member.get(field):
+                    member[field] = str(member[field]).replace('\n', ' ').replace('\r', '').replace('\t', ' ').strip()
+
             # Get family members
             cursor.execute('''
                 SELECT member_number, name, relationship
@@ -1652,7 +1658,7 @@ def get_all_members():
                     SELECT id FROM members WHERE member_number = ?
                 )
             ''', (member['member_number'],))
-            
+
             member['family_members'] = [dict(fam) for fam in cursor.fetchall()]
             members.append(member)
         
