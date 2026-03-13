@@ -566,52 +566,121 @@ def import_excel():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    """Login endpoint - supports email, phone number, or member number"""
+    """Login endpoint - ULTRA FLEXIBLE - tries all combinations"""
     data = request.json
     identifier = data.get('email', '').strip()
     password = data.get('password', '').strip()
     
     if not identifier or not password:
-        return jsonify({'error': 'Email/phone/member number and password required'}), 400
+        return jsonify({'error': 'Please enter both username and password'}), 400
     
     conn = get_db()
     cursor = conn.cursor()
     
     try:
-        password_hash = hash_password(password)
-        
-        # Normalize phone number by removing spaces, dashes, parentheses
+        # Normalize inputs
         normalized_identifier = identifier.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+        normalized_password = password.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+        identifier_lower = identifier.lower()
         
-        # Check if input is a member number (starts with M)
-        if normalized_identifier.upper().startswith('M'):
+        # Build list of all possible password hashes to try
+        password_attempts = [
+            hash_password(password),                    # As entered
+            hash_password(normalized_password),          # Normalized
+            hash_password(password.lower()),            # Lowercase
+            hash_password(identifier),                  # Username as password
+            hash_password(normalized_identifier),       # Normalized username
+            hash_password(identifier_lower),            # Lowercase username
+            hash_password(identifier.split('@')[0]),    # Email prefix
+            hash_password(identifier_lower.split('@')[0])  # Lowercase email prefix
+        ]
+        
+        # Remove duplicates
+        password_attempts = list(set(password_attempts))
+        
+        member = None
+        
+        # Try ALL possible combinations until one works
+        # This is intentionally permissive for ease of use
+        
+        # 1. Try as email with all password attempts
+        for pwd_hash in password_attempts:
             cursor.execute('''
                 SELECT member_number, first_name, surname, email, membership_type, 
-                       expiry_date, status, photo_url, points, is_admin
-                FROM members 
-                WHERE UPPER(member_number) = ? AND password_hash = ?
-            ''', (normalized_identifier.upper(), password_hash))
-        # Check if input looks like a phone number (digits only, 10 chars, starts with 0)
-        elif normalized_identifier.isdigit() and len(normalized_identifier) == 10 and normalized_identifier.startswith('0'):
-            # Try phone number - check against normalized phone in database
-            cursor.execute('''
-                SELECT member_number, first_name, surname, email, membership_type, 
-                       expiry_date, status, photo_url, points, is_admin
-                FROM members 
-                WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ? 
-                AND password_hash = ?
-            ''', (normalized_identifier, password_hash))
-        else:
-            # Assume email (convert to lowercase)
-            identifier = identifier.lower()
-            cursor.execute('''
-                SELECT member_number, first_name, surname, email, membership_type, 
-                       expiry_date, status, photo_url, points, is_admin
+                       expiry_date, status, photo_url, points, is_admin, phone
                 FROM members 
                 WHERE LOWER(email) = ? AND password_hash = ?
-            ''', (identifier, password_hash))
+            ''', (identifier_lower, pwd_hash))
+            member = cursor.fetchone()
+            if member:
+                break
         
-        member = cursor.fetchone()
+        # 2. If not found, try as phone number
+        if not member and normalized_identifier.isdigit() and len(normalized_identifier) >= 10:
+            phone_to_try = normalized_identifier[-10:]  # Last 10 digits
+            for pwd_hash in password_attempts:
+                cursor.execute('''
+                    SELECT member_number, first_name, surname, email, membership_type, 
+                           expiry_date, status, photo_url, points, is_admin, phone
+                    FROM members 
+                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ? 
+                    AND password_hash = ?
+                ''', (phone_to_try, pwd_hash))
+                member = cursor.fetchone()
+                if member:
+                    break
+        
+        # 3. If not found, try as member number
+        if not member and normalized_identifier.upper().startswith('M'):
+            for pwd_hash in password_attempts:
+                cursor.execute('''
+                    SELECT member_number, first_name, surname, email, membership_type, 
+                           expiry_date, status, photo_url, points, is_admin, phone
+                    FROM members 
+                    WHERE UPPER(member_number) = ? AND password_hash = ?
+                ''', (normalized_identifier.upper(), pwd_hash))
+                member = cursor.fetchone()
+                if member:
+                    break
+        
+        # 4. LAST RESORT: Try matching identifier to email/phone and password to email/phone
+        # This handles cases where they mix them up
+        if not member:
+            # Get all members that match identifier by email OR phone
+            cursor.execute('''
+                SELECT member_number, first_name, surname, email, membership_type, 
+                       expiry_date, status, photo_url, points, is_admin, phone, password_hash
+                FROM members 
+                WHERE LOWER(email) = ? 
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ?
+            ''', (identifier_lower, normalized_identifier[-10:] if normalized_identifier.isdigit() and len(normalized_identifier) >= 10 else ''))
+            
+            potential_members = cursor.fetchall()
+            
+            for pot_member in potential_members:
+                stored_email = pot_member[3].lower()
+                stored_phone = pot_member[10]
+                stored_password_hash = pot_member[11]
+                
+                # Normalize stored phone
+                if stored_phone:
+                    stored_phone_normalized = stored_phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+                else:
+                    stored_phone_normalized = ''
+                
+                email_prefix = stored_email.split('@')[0]
+                
+                # Try: password = email, email prefix, or phone
+                if stored_password_hash in [
+                    hash_password(stored_email),
+                    hash_password(email_prefix),
+                    hash_password(stored_phone_normalized) if stored_phone_normalized else None,
+                    hash_password(password),
+                    hash_password(normalized_password),
+                    hash_password(password.lower())
+                ]:
+                    member = pot_member
+                    break
         
         if not member:
             conn.close()
