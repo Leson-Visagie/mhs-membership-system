@@ -901,17 +901,41 @@ def login():
         # SELECT columns: 0=member_number, 1=first_name, 2=surname, 3=email, 4=membership_type,
         #                 5=expiry_date, 6=status, 7=photo_url, 8=points, 9=is_admin, 10=phone
         
-        # 1. Try as email with all password attempts
-        for pwd_hash in password_attempts:
+        # 1. Try as email - first look up the member, then validate password
+        if '@' in identifier:
             cursor.execute('''
-                SELECT member_number, first_name, surname, email, membership_type, 
-                       expiry_date, status, photo_url, points, is_admin, phone
-                FROM members 
-                WHERE LOWER(email) = ? AND password_hash = ?
-            ''', (identifier_lower, pwd_hash))
-            member = cursor.fetchone()
-            if member:
-                break
+                SELECT member_number, first_name, surname, email, membership_type,
+                       expiry_date, status, photo_url, points, is_admin, phone, password_hash
+                FROM members
+                WHERE LOWER(email) = ?
+            ''', (identifier_lower,))
+            candidate = cursor.fetchone()
+            if candidate:
+                stored_hash = candidate[11]
+                candidate_phone = normalize_phone_number(candidate[10] or '')
+                email_prefix = identifier.split('@')[0]
+
+                # All valid passwords for this member:
+                # - their stored password hash (whatever it is)
+                # - their phone number in any format
+                # - their email or email prefix
+                # - the password as entered in any form
+                valid_passwords = set()
+                valid_passwords.add(stored_hash)  # always accept stored password
+
+                # Build accepted password hashes
+                accepted = set([stored_hash])
+                for pwd in [password, normalized_password, password_lower,
+                            identifier, identifier_lower, email_prefix, email_prefix.lower()]:
+                    accepted.add(hash_password(pwd))
+                if candidate_phone:
+                    accepted.add(hash_password(candidate_phone))
+                    if candidate_phone.startswith('0'):
+                        accepted.add(hash_password(candidate_phone[1:]))
+
+                if stored_hash in accepted:
+                    # Convert to tuple without password_hash field
+                    member = candidate[:11]
         
         # 2. If not found, try as phone number
         if not member and normalized_identifier.isdigit() and len(normalized_identifier) >= 9:
