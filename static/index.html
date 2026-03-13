@@ -1420,6 +1420,12 @@ body::after {
 
         // View Management
         function showView(viewName) {
+            // Block non-admins from accessing admin or scanner views
+            if ((viewName === 'admin' || viewName === 'scanner') && 
+                (!currentUser || currentUser.role !== 'admin')) {
+                console.warn('Access denied: admin/scanner requires admin role');
+                return;
+            }
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(viewName + 'View').classList.add('active');
             
@@ -2053,6 +2059,11 @@ function handleQRDetection(qrData) {
                                     ${m.is_admin ? '⬇️ Remove Admin' : '⬆️ Make Admin'}
                                 </button>
                             ` : ''}
+                            <button onclick="resetPassword('${safeMemberNumber}', '${safeName}')" 
+                                    style="background: #6366F1; color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
+                                    title="Reset password to default">
+                                🔑 Reset PW
+                            </button>
                             ${!isOwnAccount ? `
                                 <button onclick="deleteMember('${safeMemberNumber}', '${safeName}')" 
                                         style="background: var(--danger); color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;"
@@ -2096,6 +2107,32 @@ function handleQRDetection(qrData) {
                 const text = row.textContent.toLowerCase();
                 row.style.display = text.includes(searchTerm) ? '' : 'none';
             });
+        }
+
+        async function resetPassword(memberNumber, memberName) {
+            if (!confirm(`Reset password for ${memberName}?
+
+This will set their password back to their phone number (or email prefix if no phone).
+They can log in with their phone number as both username and password.`)) {
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE}/admin/reset-password/${memberNumber}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': authToken }
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    alert(`✅ Password reset!
+${memberName} can now log in with:
+Username: their phone or email
+Password: ${result.default_password}`);
+                } else {
+                    alert(`❌ ${result.error || 'Failed to reset password'}`);
+                }
+            } catch (error) {
+                alert('❌ Failed to reset password: ' + error.message);
+            }
         }
 
         async function deleteMember(memberNumber, memberName) {
