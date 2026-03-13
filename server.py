@@ -882,7 +882,15 @@ def login():
             email_prefix = identifier.split('@')[0]
             password_attempts.extend([
                 hash_password(email_prefix),                 # Email prefix
-                hash_password(email_prefix.lower())          # Lowercase email prefix
+                hash_password(email_prefix.lower()),         # Lowercase email prefix
+            ])
+        
+        # Also try password as email prefix (for members whose password IS their email prefix)
+        if '@' in password:
+            pwd_prefix = password.split('@')[0]
+            password_attempts.extend([
+                hash_password(pwd_prefix),
+                hash_password(pwd_prefix.lower()),
             ])
         
         # Remove duplicates
@@ -998,7 +1006,7 @@ def login():
         
         if not member:
             conn.close()
-            return jsonify({'error': 'Invalid credentials'}), 401
+            return jsonify({'error': 'Login failed. Your username is your email or phone number. Your password is your phone number (e.g. 0821234567). Contact your admin if you need help.'}), 401
         
         # Extract member data using tuple indices
         member_number = member[0]
@@ -1852,6 +1860,49 @@ def create_admin():
     except Exception as e:
         conn.close()
         return jsonify({'error': f'Failed to create admin: {str(e)}'}), 500
+
+@app.route('/api/admin/reset-password/<member_number>', methods=['POST'])
+def reset_member_password(member_number):
+    """Reset a member's password back to their default (phone or email prefix). Admin only."""
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('SELECT id, email, phone, first_name, surname FROM members WHERE member_number = ?', (member_number,))
+        member = cursor.fetchone()
+
+        if not member:
+            conn.close()
+            return jsonify({'error': 'Member not found'}), 404
+
+        phone = normalize_phone_number(member['phone'] or '')
+        email_prefix = (member['email'] or '').split('@')[0]
+        default_password = phone if phone and len(phone) >= 9 else email_prefix
+
+        if not default_password:
+            conn.close()
+            return jsonify({'error': 'No phone or email to reset password to'}), 400
+
+        cursor.execute('UPDATE members SET password_hash = ? WHERE member_number = ?',
+                      (hash_password(default_password), member_number))
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'message': f"Password reset for {member['first_name']} {member['surname']}",
+            'default_password': default_password
+        })
+
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': f'Failed to reset password: {str(e)}'}), 500
 
 @app.route('/api/admin/sync-passwords', methods=['POST'])
 def admin_sync_passwords():
