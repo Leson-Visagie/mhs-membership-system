@@ -145,9 +145,154 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # Sync all member passwords to match their current phone/email on every startup
+    print("🔄 Running password sync on startup...")
+    sync_passwords()
+
 def hash_password(password):
     """Hash password using SHA256"""
     return hashlib.sha256(password.encode()).hexdigest()
+
+def normalize_phone_number(phone):
+    """Normalize a phone number to a standard 10-digit format starting with 0"""
+    if not phone:
+        return ''
+    try:
+        # Handle scientific notation from Excel
+        if isinstance(phone, float) or (isinstance(phone, str) and '.' in phone):
+            phone = str(int(float(phone)))
+        phone = str(phone)
+        digits_only = ''.join(c for c in phone if c.isdigit())
+        if len(digits_only) == 9:
+            return '0' + digits_only
+        elif len(digits_only) == 10 and digits_only.startswith('0'):
+            return digits_only
+        elif len(digits_only) == 10 and not digits_only.startswith('0'):
+            return '0' + digits_only[-9:]
+        elif len(digits_only) > 10:
+            candidate = digits_only[-10:]
+            if candidate.startswith('0'):
+                return candidate
+            return '0' + digits_only[-9:]
+        elif digits_only:
+            return digits_only  # Less than 9 digits - return as-is
+    except Exception:
+        pass
+    return ''
+
+def sync_passwords(conn=None):
+    """
+    Sync every member's password so it always matches their current phone number
+    (or email prefix if no valid phone). Also normalizes stored phone numbers.
+    
+    - Members with a valid phone: password = normalized 10-digit phone, phone stored normalized
+    - Members with no valid phone: password = username part of email
+    - Admin passwords are NEVER changed automatically
+    - Members who have already changed their password away from the default are NOT reset
+      (we detect this by checking if current hash matches ANY known default for that member)
+    
+    Returns a dict with counts: updated, skipped, errors
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db()
+        close_conn = True
+
+    cursor = conn.cursor()
+    updated = 0
+    skipped = 0
+    errors = 0
+
+    try:
+        cursor.execute('''
+            SELECT id, member_number, first_name, surname, email, phone,
+                   password_hash, is_admin, status
+            FROM members
+        ''')
+        members = cursor.fetchall()
+
+        for m in members:
+            mid, member_number, first_name, surname, email, phone, \
+                current_hash, is_admin, status = m
+
+            # Never touch admin passwords automatically
+            if is_admin:
+                skipped += 1
+                continue
+
+            try:
+                raw_phone = phone or ''
+                normalized = normalize_phone_number(raw_phone)
+                email_prefix = (email or '').split('@')[0]
+
+                # Determine what the default password SHOULD be
+                if normalized and len(normalized) >= 9:
+                    expected_password = normalized
+                else:
+                    expected_password = email_prefix
+
+                # Determine what ALL valid "default" passwords could have been
+                # (covers old imports where phone wasn't normalized)
+                candidate_defaults = set()
+                if normalized:
+                    candidate_defaults.add(normalized)
+                    # Also accept the 9-digit variant (without leading 0)
+                    if normalized.startswith('0') and len(normalized) == 10:
+                        candidate_defaults.add(normalized[1:])
+                if email_prefix:
+                    candidate_defaults.add(email_prefix)
+                    candidate_defaults.add(email_prefix.lower())
+                # Raw phone as stored in DB (may not be normalized yet)
+                if raw_phone:
+                    raw_digits = ''.join(c for c in str(raw_phone) if c.isdigit())
+                    if raw_digits:
+                        candidate_defaults.add(raw_digits)
+                        if raw_digits.startswith('0'):
+                            candidate_defaults.add(raw_digits[1:])
+
+                candidate_hashes = {hash_password(p) for p in candidate_defaults if p}
+
+                # Only update if current password is still one of the default candidates
+                # This preserves passwords that members have changed themselves
+                if current_hash not in candidate_hashes:
+                    # Member has a custom password — still normalize the phone field
+                    if normalized and normalized != raw_phone:
+                        cursor.execute(
+                            'UPDATE members SET phone = ? WHERE id = ?',
+                            (normalized, mid)
+                        )
+                    skipped += 1
+                    continue
+
+                new_hash = hash_password(expected_password)
+
+                # Only write if something actually changes
+                if new_hash != current_hash or (normalized and normalized != raw_phone):
+                    cursor.execute('''
+                        UPDATE members
+                        SET password_hash = ?,
+                            phone = ?
+                        WHERE id = ?
+                    ''', (new_hash, normalized if normalized else raw_phone, mid))
+                    updated += 1
+                else:
+                    skipped += 1
+
+            except Exception as e:
+                print(f"  ⚠️  sync_passwords: error on {member_number}: {e}")
+                errors += 1
+
+        conn.commit()
+
+    except Exception as e:
+        print(f"sync_passwords fatal error: {e}")
+        errors += 1
+    finally:
+        if close_conn:
+            conn.close()
+
+    print(f"🔑 sync_passwords complete — updated: {updated}, skipped: {skipped}, errors: {errors}")
+    return {'updated': updated, 'skipped': skipped, 'errors': errors}
 
 def normalize_name(name):
     """Normalize a name by removing diacritics and converting to uppercase"""
@@ -569,7 +714,11 @@ def import_excel():
     
     conn.commit()
     conn.close()
-    
+
+    # After import, sync all passwords so new members can log in immediately
+    print("🔄 Running password sync after import...")
+    sync_passwords()
+
     return jsonify({
         'success': True,
         'imported': imported,
@@ -1529,6 +1678,26 @@ def create_admin():
     except Exception as e:
         conn.close()
         return jsonify({'error': f'Failed to create admin: {str(e)}'}), 500
+
+@app.route('/api/admin/sync-passwords', methods=['POST'])
+def admin_sync_passwords():
+    """
+    Manually trigger password sync for all members (Admin only).
+    Safe to run at any time — does not reset custom passwords.
+    """
+    token = request.headers.get('Authorization')
+    user = verify_token(token)
+
+    if not user or user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized - Admin access required'}), 401
+
+    result = sync_passwords()
+    return jsonify({
+        'success': True,
+        'message': f"Password sync complete. Updated: {result['updated']}, "
+                   f"Skipped: {result['skipped']}, Errors: {result['errors']}",
+        **result
+    })
 
 @app.route('/api/admin/delete-member/<member_number>', methods=['DELETE'])
 def delete_member(member_number):
